@@ -51,6 +51,10 @@ export interface TerrainFeature {
   kind: TerrainKind;
   /** 凸多角形の頂点(m)。順番は時計回り・反時計回りどちらでもよい */
   poly: Vec2[];
+  /** 建物:射撃班とスナイパーが中に入れる */
+  enterable?: boolean;
+  /** 入れる建物:IFV の機関砲で外壁に突破口が開いた */
+  breached?: boolean;
 }
 
 export interface MapData {
@@ -96,6 +100,8 @@ export interface Orders {
   mountId?: string | null;
   /** 射撃班:軽対戦車火器の使用許可(省略時は許可) */
   atAllowed?: boolean;
+  /** 射撃班・スナイパー:経路の終点からこの建物に入る(敵がいれば突入する) */
+  enterId?: string | null;
   /** 射撃班:発煙手榴弾を投げる(地点と、フェイズ開始から何秒目か) */
   smokeThrows?: FireMission[];
   /**
@@ -200,6 +206,14 @@ export interface Unit {
   mountTicks: number;
   /** IFV:砲塔の向き(描画用) */
   turret: number;
+
+  // ---- 建物
+  /** 中にいる建物の id(入れる建物のみ) */
+  inBuilding: string | null;
+  /** 建物に入る・出る進み具合(ティック) */
+  buildingTicks: number;
+  /** このティックに敵のいる建物へ突入した(その建物の id。手榴弾の効果に使う) */
+  assaulted: string | null;
 
   // ---- 軽対戦車火器
   atRounds: number;

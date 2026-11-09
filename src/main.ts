@@ -7,10 +7,11 @@ import outskirtsA from '../stages/outskirts-a.json';
 import outskirtsB from '../stages/outskirts-b.json';
 import outskirtsC from '../stages/outskirts-c.json';
 import crossroads from '../stages/crossroads.json';
+import riverside from '../stages/riverside.json';
 import { App } from './ui/app';
 import { renderMissionSelect } from './ui/missions';
 
-const STAGES = [village, ridge, hill, meadow, outskirtsA, outskirtsB, outskirtsC, crossroads] as StageData[];
+const STAGES = [village, ridge, hill, meadow, outskirtsA, outskirtsB, outskirtsC, crossroads, riverside] as StageData[];
 const $ = (id: string) => document.getElementById(id)!;
 
 // URL の #ステージid で直接そのミッションを開く(再読み込みしても同じミッションのまま)

@@ -6,6 +6,7 @@ import {
   DAMAGE,
   FIRETEAM,
   AT_WEAPON,
+  BUILDING,
   IFV,
   MORTAR,
   PHASE_TICKS,
@@ -23,6 +24,7 @@ import { atDecide, dismountStep, ifvDamageFactor, ifvFollowRoute, ifvFollowWithd
 import { mortarSmoke, queueThrows, smokeBlocks, tryThrow, updateSmokes } from './smoke';
 import { blastEffect, inAnyCover, pointObserved, queueMissions, tryFire, updateMortarState, WARNING_TICKS } from './mortar';
 import { menAlive } from './units';
+import { approachPoint, ASSAULT_TICKS, atEntrance, buildingById, buildingDamageFactor, capacityOf, ENTER_TICKS, EXIT_TICKS, insidePoint } from './building';
 import type { MapData, Orders, SimState, Unit, Vec2 } from './types';
 
 const REACTION_TICKS = Math.round(CONTACT.reactionSec * TICKS_PER_SECOND);
@@ -101,6 +103,7 @@ export function issueOrders(state: SimState, orders: Record<string, Orders>): Si
     };
     if (u.kind === 'mortar') queueMissions(u, state.tick);
     if (u.smokeGrenades > 0 || (o.smokeThrows ?? []).length > 0) queueThrows(u, state.tick);
+    if (u.inBuilding !== null || (o.enterId ?? null) !== (prevEnter(state, u.id) ?? null)) u.buildingTicks = 0;
     u.routeIndex = 0;
     u.waitTicksLeft = -1;
     u.withdrawIndex = 0;
@@ -108,6 +111,10 @@ export function issueOrders(state: SimState, orders: Record<string, Orders>): Si
     if (u.activity === 'advancing') u.activity = 'engaged';
   }
   return s;
+}
+
+function prevEnter(state: SimState, id: string): string | null | undefined {
+  return state.units.find((x) => x.id === id)?.orders.enterId;
 }
 
 /** 1フェイズ(10秒)ぶん進める。各ティックの状態を順に返す(最後が次の計画フェイズの状態) */
@@ -182,6 +189,63 @@ function followWithdraw(map: MapData, u: Unit): void {
   }
   if (moveToward(map, u, p, unitStats(u.kind).speed * CONTACT.withdrawSpeedFactor)) u.withdrawIndex++;
   if (u.withdrawIndex >= u.orders.withdrawRoute.length) u.activity = 'engaged';
+}
+
+/** 建物の中の班が、次に向かおうとしている地点(動くつもりがなければ null) */
+function moveDest(u: Unit): Vec2 | null {
+  if (u.activity === 'withdrawing') return u.orders.withdrawRoute[u.withdrawIndex] ?? null;
+  if (u.activity === 'route' || u.activity === 'advancing') return u.orders.route[u.routeIndex]?.pos ?? null;
+  return null;
+}
+
+/**
+ * 建物に入る・出る。design.md 6.7
+ * - 中にいて動こうとしているとき:2 秒で外へ出る(出口は行き先に一番近い壁の外)
+ * - 経路の終点で「入る」を命じられているとき:入口へ歩き、3 秒で入る。敵がいれば突入(3 秒、入った瞬間に手榴弾)
+ * 制圧状態以上では進まない。
+ */
+function buildingMove(map: MapData, u: Unit, prev: Unit[], canMove: boolean): void {
+  if (u.kind !== 'fireteam' && u.kind !== 'sniper') return;
+  if (u.inBuilding !== null) {
+    const dest = moveDest(u);
+    const b = buildingById(map, u.inBuilding);
+    if (!dest || !b) {
+      u.buildingTicks = 0;
+      return;
+    }
+    if (!canMove || ++u.buildingTicks < EXIT_TICKS) return;
+    u.pos = approachPoint(b, dest);
+    u.inBuilding = null;
+    u.buildingTicks = 0;
+    u.moved = true;
+    return;
+  }
+  const b = buildingById(map, u.orders.enterId);
+  if (!b) return;
+  // 経路を終えてから入る(撃ち合い中でも、経路を終えていれば入口へ向かう)
+  const busy = u.activity === 'reacting' || u.activity === 'seekingCover' || (u.activity === 'withdrawing' && u.withdrawIndex < u.orders.withdrawRoute.length);
+  if (u.routeIndex < u.orders.route.length || busy) {
+    u.buildingTicks = 0;
+    return;
+  }
+  if (!atEntrance(b, u.pos)) {
+    u.buildingTicks = 0;
+    if (canMove) moveToward(map, u, approachPoint(b, u.pos), unitStats(u.kind).speed);
+    return;
+  }
+  if (!canMove) return;
+  const friends = prev.filter((x) => x.alive && x.side === u.side && x.inBuilding === b.id && x.id !== u.id).length;
+  if (friends >= capacityOf(b)) {
+    u.buildingTicks = 0;
+    return;
+  }
+  const foes = prev.some((x) => x.alive && x.side !== u.side && x.inBuilding === b.id);
+  if (++u.buildingTicks < (foes ? ASSAULT_TICKS : ENTER_TICKS)) return;
+  u.inBuilding = b.id;
+  u.pos = insidePoint(b, u.pos);
+  u.buildingTicks = 0;
+  u.prone = false;
+  if (foes) u.assaulted = b.id;
 }
 
 /** 3秒で届く範囲で、脅威の方向に正面が向いた遮蔽の位置を探す。design.md 7章 */
@@ -376,6 +440,7 @@ export function step(state: SimState): SimState {
     u.moved = false;
     u.shot = null;
     u.atShot = null;
+    u.assaulted = null;
     if (!u.alive || u.mountedIn !== null) continue; // 乗車中は何もしない(位置はあとで車両に合わせる)
     const pu = prevById.get(u.id)!;
     const enemies = prev.filter((e) => e.alive && e.side !== u.side);
@@ -437,7 +502,7 @@ export function step(state: SimState): SimState {
         if (canMove) followRoute(map, u); // 反応するまでは前の行動を続ける
         if (--u.reactTicksLeft <= 0) {
           const threat = u.threatPos ?? u.pos;
-          if (effectiveCover(map, u.pos, threat)) {
+          if (u.inBuilding !== null || effectiveCover(map, u.pos, threat)) {
             u.activity = 'engaged';
           } else {
             u.coverTarget = findCover(map, u.pos, threat, unitStats(u.kind).speed);
@@ -477,6 +542,7 @@ export function step(state: SimState): SimState {
         if (!isPinned(u)) followWithdraw(map, u);
         break;
     }
+    buildingMove(map, u, prev, canMove);
 
     // 射撃目標:陣営が知っている敵のうち、射程内で射線の通る敵
     const inContact = u.activity !== 'route' && u.activity !== 'reacting';
@@ -589,13 +655,17 @@ export function step(state: SimState): SimState {
     } else if (shooter.shot.targetId !== null) {
       const t = prevById.get(shooter.shot.targetId)!;
       const r = (isCannon ? 1 : rangeFactor(dist(from, t.pos))) * power;
-      // IFV の機関砲に撃たれ続けた硬い遮蔽は崩れる
+      // 建物の中の班:向きの内側からは強く守られ、横・後ろや突破口のあとは弱い
+      const bf = buildingDamageFactor(map, t, from);
+      // IFV の機関砲に撃たれ続けた硬い遮蔽は崩れ、建物の外壁には突破口が開く
       if (isCannon) {
-        const wall = protectingHard(map, t.pos, from);
+        const b = bf !== null ? buildingById(map, t.inBuilding) : null;
+        const wall = b ? (b.breached ? null : b) : protectingHard(map, t.pos, from);
         if (wall) s.wallDamage[wall.id] = (s.wallDamage[wall.id] ?? 0) + 1;
       }
       const cover = effectiveCover(map, t.pos, from);
-      const tf = cover === 'hard' ? COVER.hardDamage
+      const tf = bf !== null ? bf
+        : cover === 'hard' ? COVER.hardDamage
         : cover === 'soft' ? COVER.softDamage
         : t.prone ? DAMAGE.proneOpen
         : t.moved ? DAMAGE.moving
@@ -620,13 +690,22 @@ export function step(state: SimState): SimState {
     }
   }
 
-  // ---- 2a. 軽対戦車火器と後方爆風、壁の崩壊
+  // ---- 2a. 突入の手榴弾、軽対戦車火器と後方爆風、壁の崩壊
+  for (const u of s.units) {
+    if (!u.assaulted) continue;
+    shooterId = u.id;
+    for (const t of prev) {
+      if (!t.alive || t.side === u.side || t.inBuilding !== u.assaulted) continue;
+      hit(t.id, BUILDING.grenadeDamage, BUILDING.grenadeSuppression, u.pos, true);
+    }
+  }
   for (const shooter of s.units) {
     if (!shooter.atShot) continue;
     shooterId = shooter.id;
     const from = prevById.get(shooter.id)!.pos;
     const t = prevById.get(shooter.atShot)!;
-    hit(t.id, AT_WEAPON.damage * ifvDamageFactor(map, t, from, 'at'), AT_WEAPON.suppression, from, true);
+    if (t.kind === 'ifv') hit(t.id, AT_WEAPON.damage * ifvDamageFactor(map, t, from, 'at'), AT_WEAPON.suppression, from, true);
+    else hit(t.id, BUILDING.atDamage, BUILDING.atSuppression, from, true); // 建物の中の班を壁ごと撃つ
     for (const f of s.units) {
       if (!f.alive || f.mountedIn !== null || f.id === shooter.id || !inBackblast(from, t.pos, f.pos)) continue;
       hit(f.id, AT_WEAPON.backblastDamage, AT_WEAPON.backblastSuppression, from, true);
@@ -634,16 +713,21 @@ export function step(state: SimState): SimState {
   }
   for (const [id, ticks] of Object.entries(s.wallDamage)) {
     if (ticks < Math.round(WALL.collapseSec * TICKS_PER_SECOND)) continue;
-    const wall = s.map.features.find((f) => f.id === id && f.kind === 'hard');
+    const wall = s.map.features.find((f) => f.id === id && (f.kind === 'hard' || (f.kind === 'building' && f.enterable)));
     delete s.wallDamage[id];
     if (!wall) continue;
     shooterId = '';
+    const isBuilding = wall.kind === 'building';
     for (const u of s.units) {
-      if (!u.alive || u.mountedIn !== null || !occupies(u.pos, wall)) continue;
+      if (!u.alive || u.mountedIn !== null) continue;
+      if (isBuilding ? u.inBuilding !== wall.id : !occupies(u.pos, wall)) continue;
+      // 崩れた・突破された瞬間、内側の兵がはく離と破片で被害を受ける(FM 90-10-1 8-10)
       hit(u.id, WALL.collapseDamage, WALL.collapseSuppression, u.pos, true);
       shelled.add(u.id);
     }
-    s.map = { ...s.map, features: s.map.features.map((f) => (f === wall ? { ...f, kind: 'soft' as const } : f)) };
+    // 硬い遮蔽は瓦礫(軟らかい遮蔽)になる。建物は崩れず、突破口が開く
+    const changed = isBuilding ? { ...wall, breached: true } : { ...wall, kind: 'soft' as const };
+    s.map = { ...s.map, features: s.map.features.map((f) => (f === wall ? changed : f)) };
   }
 
   // ---- 2b. 迫撃砲弾:飛翔音の予兆と着弾(位置はこのティックに動いたあと)

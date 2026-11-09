@@ -60,11 +60,12 @@ export function drawTerrain(v: View) {
       if (f.kind !== kind) continue;
       const st = TERRAIN_STYLE[kind];
       poly(v, f.poly);
-      ctx.fillStyle = st.fill;
+      ctx.fillStyle = f.enterable ? '#8a5d48' : st.fill;
       ctx.fill();
       ctx.strokeStyle = st.stroke;
       ctx.lineWidth = kind === 'concealment' ? 1 : 1.5;
       ctx.stroke();
+      if (f.enterable) drawEnterable(v, f.poly, !!f.breached);
     }
   }
   // 方位と縮尺
@@ -79,6 +80,30 @@ export function drawTerrain(v: View) {
   ctx.lineTo(8 + 20 * scale, map.height * scale - 10);
   ctx.stroke();
   ctx.fillText('20 m', 10, map.height * scale - 14);
+}
+
+/** 入れる建物:内側に窓の点線。突破口が開いたら外周をオレンジの破線で示す */
+function drawEnterable(v: View, pts: Vec2[], breached: boolean) {
+  const { ctx } = v;
+  const c = pts.reduce((a, p) => ({ x: a.x + p.x / pts.length, y: a.y + p.y / pts.length }), { x: 0, y: 0 });
+  const inner = pts.map((p) => {
+    const d = Math.hypot(c.x - p.x, c.y - p.y) || 1;
+    return { x: p.x + ((c.x - p.x) / d) * 1.5, y: p.y + ((c.y - p.y) / d) * 1.5 };
+  });
+  ctx.save();
+  poly(v, inner);
+  ctx.strokeStyle = 'rgba(255,230,180,0.75)';
+  ctx.lineWidth = 1.5;
+  ctx.setLineDash([3, 4]);
+  ctx.stroke();
+  if (breached) {
+    poly(v, pts);
+    ctx.strokeStyle = '#ff9f43';
+    ctx.lineWidth = 3;
+    ctx.setLineDash([6, 5]);
+    ctx.stroke();
+  }
+  ctx.restore();
 }
 
 /** 防衛線(ここを敵に越えられたら負け) */
@@ -616,6 +641,15 @@ export function drawOrders(v: View, u: Unit, o: Orders, selected: boolean, targe
     ctx.textAlign = 'left';
     ctx.fillText(`${i + 1}${w.waitSec > 0 ? ` 待${w.waitSec}秒` : ''}`, s.x + 6, s.y - 4);
   });
+  // 経路の終点から建物に入る
+  if (o.enterId) {
+    const s = toScreen(v, o.route.at(-1)?.pos ?? u.pos);
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#ffe6b4';
+    ctx.font = 'bold 12px system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillText('▶ 建物に入る', s.x + 6, s.y + 14);
+  }
   // 離脱経路
   if (o.withdrawRoute.length > 0) {
     const last = o.route.at(-1)?.pos ?? u.pos;

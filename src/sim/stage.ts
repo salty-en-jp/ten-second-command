@@ -4,6 +4,7 @@ import { defaultOrders, makeUnit, mount } from './units';
 import type { MapData, Orders, Side, SimState, TerrainFeature, TerrainKind, UnitKind, Vec2 } from './types';
 import { createState } from './step';
 import { applyAi, type AiPlan } from './ai';
+import { buildingAt } from './building';
 
 /** ステージ JSON の形。角度は度数で書く */
 export interface StageData {
@@ -19,6 +20,8 @@ export interface StageData {
     id: string;
     kind: TerrainKind;
     note?: string;
+    /** 建物:射撃班とスナイパーが中に入れる */
+    enterable?: boolean;
     rect?: { cx: number; cy: number; w: number; h: number; angleDeg?: number };
     poly?: Vec2[];
   }>;
@@ -55,6 +58,7 @@ export function loadStage(data: StageData): SimState {
     id: f.id,
     kind: f.kind,
     poly: f.poly ?? (f.rect ? rect(f.rect.cx, f.rect.cy, f.rect.w, f.rect.h, (f.rect.angleDeg ?? 0) * DEG) : []),
+    ...(f.enterable ? { enterable: true } : {}),
   }));
   const map: MapData = { width: data.width, height: data.height, features };
   const units = data.units.map((u) => {
@@ -66,6 +70,9 @@ export function loadStage(data: StageData): SimState {
     };
     const unit = makeUnit(u.kind ?? 'fireteam', u.id, u.side, { x: u.x, y: u.y }, u.facingDeg * DEG, orders);
     unit.atRounds = u.at ?? 0;
+    // 入れる建物の中に置かれた班は、最初から建物の中にいる
+    const b = unit.kind === 'fireteam' || unit.kind === 'sniper' ? buildingAt(map, unit.pos) : null;
+    if (b) unit.inBuilding = b.id;
     return unit;
   });
   for (const u of data.units) {
