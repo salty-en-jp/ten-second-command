@@ -86,8 +86,19 @@ export const SUPPRESSION = {
   advanceResumeBelow: 40,
   /** 制圧射撃(見えない最終確認位置への射撃)は通常の半分 */
   suppressiveFireFactor: 0.5,
-  /** 【仮決め】制圧射撃の着弾点からこの半径(m)にいる敵が制圧値を受ける */
+  /** 制圧射撃の着弾点からこの半径(m)にいる敵が制圧値を受ける (暫定) */
   suppressiveFireRadius: 5,
+  /**
+   * 射手の制圧値がこれ未満(平常・動揺)の射撃だけが、相手の回復を止める。
+   * 制圧状態の射撃と盲射は、制圧値を加えるが回復の待ちを止めない。
+   */
+  stopsRecoveryBelow: 70,
+} as const;
+
+/** 盲射:釘付けでも、効いている遮蔽の内側からなら銃だけ出して撃てる (暫定) */
+export const BLIND_FIRE = {
+  damage: 0.1,
+  suppression: 0.2,
 } as const;
 
 /** 移動の到着判定(m) */

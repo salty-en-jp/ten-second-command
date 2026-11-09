@@ -1,5 +1,6 @@
 import {
   ARRIVE_EPSILON,
+  BLIND_FIRE,
   CONTACT,
   COVER,
   DAMAGE,
@@ -26,6 +27,7 @@ function cloneUnit(u: Unit): Unit {
     lastShotFrom: u.lastShotFrom && { ...u.lastShotFrom },
     lastKnownTargetPos: u.lastKnownTargetPos && { ...u.lastKnownTargetPos },
     shot: u.shot && { ...u.shot, point: { ...u.shot.point } },
+    orders: u.orders,
   };
 }
 
@@ -163,12 +165,19 @@ export function findCover(map: MapData, from: Vec2, threat: Vec2): Vec2 | null {
 
 // ---------------------------------------------------------------- 1ティック
 
+function aim(u: Unit, t: Unit, blind: boolean): void {
+  u.shot = { targetId: t.id, point: { ...t.pos }, blind };
+  u.lastKnownTargetPos = { ...t.pos };
+  u.lastKnownTargetId = t.id;
+  u.threatPos = { ...t.pos };
+}
+
 const isSuppressed = (u: Unit) => u.suppression >= SUPPRESSION.suppressed;
 const isPinned = (u: Unit) => u.suppression >= SUPPRESSION.pinned;
 
 /** 射手の状態による係数。design.md 8.1 */
 function shooterFactor(u: Unit): number {
-  if (isPinned(u)) return 0;
+  if (isPinned(u)) return 1; // 盲射。係数は BLIND_FIRE で別にかける
   if (isSuppressed(u)) return DAMAGE.shooterSuppressed;
   if (u.suppression >= SUPPRESSION.shaken) return DAMAGE.shooterShaken;
   return 1;
@@ -214,7 +223,7 @@ export function step(state: SimState): SimState {
     const pu = prevById.get(u.id)!;
     const enemies = prev.filter((e) => e.alive && e.side !== u.side);
     const seen = enemies.filter((e) => sees(map, pu, e));
-    const wasShot = pu.ticksSinceShot === 0;
+    const wasShot = pu.firedOn;
     const discovered = enemies.some((e) => sees(map, e, pu));
 
     if (u.orders.fire === 'hold' && !u.holdFireLifted && (wasShot || discovered)) u.holdFireLifted = true;
@@ -288,25 +297,37 @@ export function step(state: SimState): SimState {
         break;
     }
 
-    // 射撃目標:陣営が知っている敵のうち、射程内で射線の通る一番近い敵
+    // 射撃目標:陣営が知っている敵のうち、射程内で射線の通る敵
     const inContact = u.activity !== 'route' && u.activity !== 'reacting';
-    if (canFire && inContact && !isPinned(u)) {
+    if (canFire && inContact) {
+      const pinned = isPinned(u);
       const targets = enemies.filter(
-        (e) => known[u.side].has(e.id) && dist(u.pos, e.pos) < FIRETEAM.maxRange && lineOfFire(map, u.pos, e.pos),
+        (e) =>
+          known[u.side].has(e.id) &&
+          dist(u.pos, e.pos) < FIRETEAM.maxRange &&
+          lineOfFire(map, u.pos, e.pos) &&
+          // 釘付けなら、効いている遮蔽の内側からの盲射だけ
+          (!pinned || effectiveCover(map, u.pos, e.pos) !== null),
       );
+      // 火力の集中:指定した敵が倒れたら指定を解除する
+      if (u.orders.focusTargetId !== null && !prevById.get(u.orders.focusTargetId)?.alive) {
+        u.orders = { ...u.orders, focusTargetId: null };
+      }
       const focus = u.orders.focusTargetId;
-      const t = (focus !== null ? targets.find((e) => e.id === focus) : undefined) ?? nearest(u.pos, targets);
-      if (t) {
-        u.shot = { targetId: t.id, point: { ...t.pos } };
-        u.lastKnownTargetPos = { ...t.pos };
-        u.threatPos = { ...t.pos };
-      } else if (
-        u.orders.policy === 'hold' &&
-        u.activity === 'engaged' &&
-        u.lastKnownTargetPos &&
-        dist(u.pos, u.lastKnownTargetPos) < FIRETEAM.maxRange
-      ) {
-        u.shot = { targetId: null, point: { ...u.lastKnownTargetPos } }; // 制圧射撃
+      const focused = focus !== null ? targets.find((e) => e.id === focus) : undefined;
+      const canSuppressAt = (p: Vec2 | null): p is Vec2 =>
+        !pinned && p !== null && dist(u.pos, p) < FIRETEAM.maxRange && lineOfFire(map, u.pos, p);
+      if (focused) {
+        aim(u, focused, pinned);
+      } else if (focus !== null && u.lastKnownTargetId === focus && canSuppressAt(u.lastKnownTargetPos)) {
+        // 指定した敵が撃てない:その最終確認位置へ制圧射撃(指定は残す)
+        u.shot = { targetId: null, point: { ...u.lastKnownTargetPos }, blind: false };
+      } else {
+        const t = nearest(u.pos, targets);
+        if (t) aim(u, t, pinned);
+        else if (u.orders.policy === 'hold' && u.activity === 'engaged' && canSuppressAt(u.lastKnownTargetPos)) {
+          u.shot = { targetId: null, point: { ...u.lastKnownTargetPos }, blind: false }; // 制圧射撃
+        }
       }
     }
 
@@ -320,15 +341,20 @@ export function step(state: SimState): SimState {
   const dmg = new Map<string, number>();
   const supp = new Map<string, number>();
   const shotFrom = new Map<string, Vec2>();
-  const hit = (id: string, d: number, sp: number, from: Vec2) => {
+  const stopsRecovery = new Set<string>();
+  const hit = (id: string, d: number, sp: number, from: Vec2, strong: boolean) => {
     dmg.set(id, (dmg.get(id) ?? 0) + d);
     supp.set(id, (supp.get(id) ?? 0) + sp);
     if (!shotFrom.has(id)) shotFrom.set(id, from);
+    if (strong) stopsRecovery.add(id);
   };
   for (const shooter of s.units) {
     if (!shooter.shot) continue;
     const from = prevById.get(shooter.id)!.pos;
     const power = (menAlive(shooter) / FIRETEAM.men) * shooterFactor(shooter);
+    const strong = shooter.suppression < SUPPRESSION.stopsRecoveryBelow;
+    const blindDmg = shooter.shot.blind ? BLIND_FIRE.damage : 1;
+    const blindSupp = shooter.shot.blind ? BLIND_FIRE.suppression : 1;
     if (shooter.shot.targetId !== null) {
       const t = prevById.get(shooter.shot.targetId)!;
       const r = rangeFactor(dist(from, t.pos)) * power;
@@ -339,7 +365,13 @@ export function step(state: SimState): SimState {
         : t.moved ? DAMAGE.moving
         : DAMAGE.standingOpen;
       const sf = cover ? COVER.suppressionFactor : 1;
-      hit(t.id, (FIRETEAM.firepower * r * tf) / TICKS_PER_SECOND, (SUPPRESSION.perFireteamPerSec * r * sf) / TICKS_PER_SECOND, from);
+      hit(
+        t.id,
+        (FIRETEAM.firepower * r * tf * blindDmg) / TICKS_PER_SECOND,
+        (SUPPRESSION.perFireteamPerSec * r * sf * blindSupp) / TICKS_PER_SECOND,
+        from,
+        strong,
+      );
     } else {
       // 制圧射撃:ダメージなし、制圧値は半分
       const p = shooter.shot.point;
@@ -347,7 +379,7 @@ export function step(state: SimState): SimState {
       for (const t of prev) {
         if (!t.alive || t.side === shooter.side || dist(t.pos, p) > SUPPRESSION.suppressiveFireRadius) continue;
         const sf = effectiveCover(map, t.pos, from) ? COVER.suppressionFactor : 1;
-        hit(t.id, 0, (SUPPRESSION.perFireteamPerSec * r * sf) / TICKS_PER_SECOND, from);
+        hit(t.id, 0, (SUPPRESSION.perFireteamPerSec * r * sf) / TICKS_PER_SECOND, from, strong);
       }
     }
   }
@@ -356,11 +388,14 @@ export function step(state: SimState): SimState {
   for (const u of s.units) {
     if (!u.alive) continue;
     const sp = supp.get(u.id);
+    u.firedOn = sp !== undefined;
     if (sp !== undefined) {
       u.hp -= dmg.get(u.id) ?? 0;
       u.suppression += sp;
-      u.ticksSinceShot = 0;
       u.lastShotFrom = { ...shotFrom.get(u.id)! };
+    }
+    if (stopsRecovery.has(u.id)) {
+      u.ticksSinceShot = 0;
     } else {
       u.ticksSinceShot = Math.min(u.ticksSinceShot + 1, Number.MAX_SAFE_INTEGER);
       if (u.ticksSinceShot >= RECOVERY_DELAY_TICKS) u.suppression -= SUPPRESSION.recoveryPerSec / TICKS_PER_SECOND;

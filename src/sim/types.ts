@@ -81,8 +81,10 @@ export interface Unit {
   coverTarget: Vec2 | null;
   /** 射撃禁止が(撃たれた・発見されたことで)解除されたか */
   holdFireLifted: boolean;
-  /** 最後に撃たれてからのティック数 */
+  /** 相手の回復を止める射撃(平常・動揺の射手の射撃)を最後に受けてからのティック数 */
   ticksSinceShot: number;
+  /** 前のティックに何らかの射撃(弱い射撃や盲射を含む)を受けたか */
+  firedOn: boolean;
   /** 敵が見えず撃たれもしない状態が続いたティック数 */
   quietTicks: number;
   /** 脅威の方向を決めるための位置(最後に見た/撃ってきた敵) */
@@ -91,6 +93,7 @@ export interface Unit {
   lastShotFrom: Vec2 | null;
   /** このユニットが最後に射撃目標にした敵の位置(最終確認位置) */
   lastKnownTargetPos: Vec2 | null;
+  lastKnownTargetId: string | null;
 
   /** このティックに動いたか(被ダメージ係数「移動中」に使う) */
   moved: boolean;
@@ -102,6 +105,8 @@ export interface Shot {
   /** 直接射撃の目標。制圧射撃なら null */
   targetId: string | null;
   point: Vec2;
+  /** 釘付け状態からの盲射か */
+  blind: boolean;
 }
 
 export type Outcome = 'ongoing' | 'blueWin' | 'redWin' | 'draw';
