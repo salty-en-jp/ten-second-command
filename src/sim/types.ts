@@ -12,6 +12,17 @@ export type UnitKind = 'fireteam' | 'sniper' | 'mortar' | 'ifv';
 export interface FireMission {
   target: Vec2;
   atSec: number;
+  /** 迫撃砲の弾の種類(省略時は榴弾) */
+  kind?: 'he' | 'smoke';
+}
+
+/** 煙の雲:startTick から endTick まで、半径 r の円を通る視線をさえぎる */
+export interface SmokeCloud {
+  id: string;
+  pos: Vec2;
+  r: number;
+  startTick: number;
+  endTick: number;
 }
 
 /** 飛んでいる迫撃砲弾 */
@@ -25,6 +36,8 @@ export interface Shell {
   impact: Vec2;
   firedTick: number;
   impactTick: number;
+  /** 弾の種類(省略時は榴弾) */
+  kind?: 'he' | 'smoke';
 }
 
 /** 迫撃砲の状態:収納(移動できる)/展開中/展開済(撃てる)/撤収中 */
@@ -44,6 +57,8 @@ export interface MapData {
   width: number;
   height: number;
   features: TerrainFeature[];
+  /** いま立っている煙(視線をさえぎる円)。煙は時間で変わるので、毎ティック作り直す */
+  smokes?: Array<{ pos: Vec2; r: number }>;
 }
 
 export interface Waypoint {
@@ -81,6 +96,8 @@ export interface Orders {
   mountId?: string | null;
   /** 射撃班:軽対戦車火器の使用許可(省略時は許可) */
   atAllowed?: boolean;
+  /** 射撃班:発煙手榴弾を投げる(地点と、フェイズ開始から何秒目か) */
+  smokeThrows?: FireMission[];
   /**
    * 射撃開始線(敵 AI の待ち伏せ用):射撃禁止のとき、陣営が知っている敵がこの距離(m)以内に入ったら撃ち始める。
    * null/省略なら使わない。
@@ -160,7 +177,12 @@ export interface Unit {
   mortarTicks: number;
   rounds: number;
   /** まだ撃っていない射撃命令(撃つティックつき) */
-  missionQueue: Array<{ target: Vec2; tick: number }>;
+  missionQueue: Array<{ target: Vec2; tick: number; kind?: 'he' | 'smoke' }>;
+  /** 迫撃砲:残りの発煙弾(弾数 rounds の内数) */
+  smokeRounds: number;
+  /** 射撃班:残りの発煙手榴弾と、まだ投げていない命令 */
+  smokeGrenades: number;
+  smokeQueue: Array<{ target: Vec2; tick: number }>;
   /** 着弾を味方が見て修正が済んだ地点 */
   adjustedAim: Vec2 | null;
 
@@ -216,6 +238,8 @@ export interface SimState {
   /** 飛んでいる迫撃砲弾 */
   shells: Shell[];
   nextShellId: number;
+  /** 煙(これから立つものと、立っているもの) */
+  smokes: SmokeCloud[];
   /** 最近の着弾(描画用。1秒で消える) */
   impacts: Array<{ pos: Vec2; tick: number; side: Side }>;
   /** 硬い遮蔽ごとの、IFV の機関砲に撃たれた累計ティック(壁の崩壊) */

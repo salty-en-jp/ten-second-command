@@ -10,6 +10,7 @@ import { lineOfFire, occupies } from './terrain';
 import { unitStats } from './config';
 import { angleDiff, angleTo } from './geometry';
 import type { MapData, Side, SimState, Unit, Vec2 } from './types';
+import { smokeBlocks } from './smoke';
 
 const DEPLOY_TICKS = Math.round(MORTAR.deploySec * TICKS_PER_SECOND);
 const PACK_TICKS = Math.round(MORTAR.packSec * TICKS_PER_SECOND);
@@ -21,9 +22,9 @@ export const WARNING_TICKS = Math.round(MORTAR.warningSec * TICKS_PER_SECOND);
 export function queueMissions(u: Unit, nowTick: number): void {
   const ms = u.orders.fireMissions ?? [];
   u.missionQueue = ms
-    .map((m, i) => ({ target: { ...m.target }, tick: nowTick + Math.round(m.atSec * TICKS_PER_SECOND), i }))
+    .map((m, i) => ({ target: { ...m.target }, tick: nowTick + Math.round(m.atSec * TICKS_PER_SECOND), i, kind: m.kind }))
     .sort((a, b) => a.tick - b.tick || a.i - b.i)
-    .map(({ target, tick }) => ({ target, tick }));
+    .map(({ target, tick, kind }) => ({ target, tick, kind }));
 }
 
 /** 移動しようとしているか(まだ経路が残っている、退避中、離脱中) */
@@ -60,7 +61,7 @@ export function pointObserved(state: SimState, side: Side, p: Vec2): boolean {
     const st = unitStats(v.kind);
     if (dist(v.pos, p) > st.sightRange) return false;
     if (angleDiff(v.facing, angleTo(v.pos, p)) > st.sightArc / 2) return false;
-    return lineOfFire(state.map, v.pos, p);
+    return lineOfFire(state.map, v.pos, p) && !smokeBlocks(state.map, v.pos, p);
   });
 }
 
@@ -77,6 +78,8 @@ export function tryFire(u: Unit, nextTick: number, map: MapData, shellId: number
     u.missionQueue.shift();
     const d = dist(u.pos, m.target);
     if (d < MORTAR.minRange || d > MORTAR.maxRange) continue; // 射程外
+    const smoke = m.kind === 'smoke';
+    if (smoke && u.smokeRounds <= 0) continue; // 発煙弾が残っていない
     const observed = u.adjustedAim !== null && dist(u.adjustedAim, m.target) <= MORTAR.adjustRadius;
     let impact = { ...m.target };
     if (!observed) {
@@ -89,6 +92,7 @@ export function tryFire(u: Unit, nextTick: number, map: MapData, shellId: number
       impact.y = Math.max(0, Math.min(map.height, impact.y));
     }
     u.rounds--;
+    if (smoke) u.smokeRounds--;
     u.cooldownTicks = INTERVAL_TICKS;
     u.lastFire = { tick: nextTick, point: { ...m.target } };
     return {
@@ -99,6 +103,7 @@ export function tryFire(u: Unit, nextTick: number, map: MapData, shellId: number
       impact,
       firedTick: nextTick,
       impactTick: nextTick + FLIGHT_TICKS,
+      kind: smoke ? ('smoke' as const) : ('he' as const),
     };
   }
   return null;
