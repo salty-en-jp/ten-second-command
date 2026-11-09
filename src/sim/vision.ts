@@ -4,6 +4,7 @@
 import { IFV, SUPPRESSION, TICKS_PER_SECOND, unitStats, VISION } from './config';
 import { angleDiff, angleTo, dist } from './geometry';
 import { insideConcealment, lineOfFire } from './terrain';
+import { smokeBlocks } from './smoke';
 import type { MapData, Side, SideVision, SimState, Unit } from './types';
 
 const EXPOSURE_TICKS = Math.round(VISION.fireExposureSec * TICKS_PER_SECOND);
@@ -33,6 +34,7 @@ export function sees(map: MapData, viewer: Unit, target: Unit): boolean {
     if (d < IFV.buttonedBlindRadius) return false;
   }
   if (angleDiff(viewer.facing, angleTo(viewer.pos, target.pos)) > arc / 2) return false;
+  if (smokeBlocks(map, viewer.pos, target.pos)) return false;
   return lineOfFire(map, viewer.pos, target.pos);
 }
 

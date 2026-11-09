@@ -184,6 +184,32 @@ export const WALL = {
   collapseSuppression: 30,
 } as const;
 
+/**
+ * 煙幕 (暫定)。FM 23-30(1988)の AN-M8・M18、FM 23-90 / ATP 3-21.90 の白リン弾をもとに、盤面がふさがりすぎないよう短くした。
+ * 煙は視線だけをさえぎり、弾は通す。風は入れない。
+ */
+export const SMOKE = {
+  grenade: {
+    /** 射撃班1つが持つ数 */
+    perTeam: 2,
+    /** 投げられる距離(m) */
+    throwRange: 30,
+    /** 投げてから煙が立つまで(秒) */
+    delaySec: 2,
+    radius: 8,
+    durationSec: 30,
+  },
+  mortar: {
+    /** 8発のうち発煙弾にできる数 */
+    maxRounds: 2,
+    radius: 10,
+    durationSec: 20,
+    /** 白リンの心理的効果:半径 8 m に制圧値だけ(ダメージなし) */
+    suppression: 20,
+    suppressRadius: 8,
+  },
+} as const;
+
 /** 兵科ごとの基本の値 */
 export function unitStats(kind: 'fireteam' | 'sniper' | 'mortar' | 'ifv') {
   return kind === 'sniper' ? SNIPER : kind === 'mortar' ? MORTAR : kind === 'ifv' ? IFV : FIRETEAM;

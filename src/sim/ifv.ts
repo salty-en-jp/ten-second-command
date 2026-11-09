@@ -8,6 +8,7 @@
 import { AT_WEAPON, ARRIVE_EPSILON, IFV, IFV_ARMOR, TICKS_PER_SECOND } from './config';
 import { angleDiff, angleTo, dist, pointInPolygon, rect, segmentHitsPolygon } from './geometry';
 import { effectiveCover, lineOfFire } from './terrain';
+import { smokeBlocks } from './smoke';
 import type { MapData, SimState, Unit, Vec2 } from './types';
 
 const MOUNT_TICKS = Math.round(IFV.mountSec * TICKS_PER_SECOND);
@@ -188,7 +189,7 @@ export function atDecide(u: Unit, enemies: Unit[], known: Set<string>, ready: bo
     .filter((e) => e.kind === 'ifv' && known.has(e.id))
     .filter((e) => {
       const d = dist(u.pos, e.pos);
-      return d >= AT_WEAPON.minRange && d <= AT_WEAPON.range && lineOfFire(map, u.pos, e.pos);
+      return d >= AT_WEAPON.minRange && d <= AT_WEAPON.range && lineOfFire(map, u.pos, e.pos) && !smokeBlocks(map, u.pos, e.pos);
     })
     .map((e) => ({ e, f: ifvDamageFactor(map, e, u.pos, 'at'), d: dist(u.pos, e.pos) }))
     .sort((a, b) => b.f - a.f || a.d - b.d);

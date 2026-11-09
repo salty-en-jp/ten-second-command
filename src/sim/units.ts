@@ -1,4 +1,4 @@
-import { MORTAR, unitStats } from './config';
+import { MORTAR, SMOKE, unitStats } from './config';
 import type { Orders, Side, Unit, UnitKind, Vec2 } from './types';
 
 export function defaultOrders(): Orders {
@@ -43,6 +43,9 @@ export function makeUnit(kind: UnitKind, id: string, side: Side, pos: Vec2, faci
     mortarState: 'packed',
     mortarTicks: 0,
     rounds: kind === 'mortar' ? MORTAR.rounds : 0,
+    smokeRounds: kind === 'mortar' ? SMOKE.mortar.maxRounds : 0,
+    smokeGrenades: kind === 'fireteam' ? SMOKE.grenade.perTeam : 0,
+    smokeQueue: [],
     missionQueue: [],
     adjustedAim: null,
     duckTicks: 0,

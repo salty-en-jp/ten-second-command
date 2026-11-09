@@ -1,10 +1,10 @@
 /** 右側のパネル:選んだ班への命令を入力する */
-import { MORTAR, SUPPRESSION, TICKS_PER_SECOND, type Orders, type SideVision, type Unit } from '../sim';
+import { MORTAR, SMOKE, SUPPRESSION, TICKS_PER_SECOND, type Orders, type SideVision, type Unit } from '../sim';
 import { label } from './orders';
 import { starText } from './storage';
 import type { Evaluation } from '../sim';
 
-export type Tool = 'route' | 'withdraw' | 'facing' | 'focus' | 'mortar';
+export type Tool = 'route' | 'withdraw' | 'facing' | 'focus' | 'mortar' | 'smoke';
 
 interface PanelProps {
   result: { ev: Evaluation; best: number } | null;
@@ -96,11 +96,13 @@ export function renderPanel(el: HTMLElement, p: PanelProps) {
           ${btn('data-tool="withdraw"', '離脱経路', p.tool === 'withdraw')}
           ${btn('data-tool="focus"', '撃つ敵を指定', p.tool === 'focus')}
           ${u.kind === 'mortar' ? btn('data-tool="mortar"', '迫撃砲の射撃', p.tool === 'mortar') : ''}
+          ${u.kind === 'fireteam' && u.mountedIn === null ? btn('data-tool="smoke"', `発煙手榴弾(${u.smokeGrenades}個)`, p.tool === 'smoke') : ''}
         </div>
         <div class="hint">${
           p.tool === 'route' ? '地図をクリックすると経路の点を足します。右クリックか「最後の点を消す」で取り消せます。'
           : p.tool === 'facing' ? (u.kind === 'sniper' ? '撃つ方向をクリックします。黄色い細い扇形(幅30°)の中に入った敵だけを撃ちます。' : '向かせたい方向をクリックします(経路の終点から)。')
           : p.tool === 'withdraw' ? '「離脱」のときに下がる経路をクリックで足します。右クリックで消します。'
+          : p.tool === 'smoke' ? `煙を立てたい場所をクリックします(${SMOKE.grenade.throwRange} m まで。1回で1個)。投げて${SMOKE.grenade.delaySec}秒で半径${SMOKE.grenade.radius} mの煙が立ち、${SMOKE.grenade.durationSec}秒続きます。煙は視線をさえぎりますが、弾は通ります。自分たちも煙の向こうは見えません。右クリックで最後の1個を取り消し。`
           : p.tool === 'mortar' ? `着弾させたい場所をクリックします(1回で1発、2秒おき。自動で「展開する」になります)。射程は${MORTAR.minRange}〜${MORTAR.maxRange} m、発射から${MORTAR.flightSec}秒で着弾。味方のだれかがその場所を見ていないと、遠くへずれます(点線の矢印)。右クリックで最後の1発を取り消し。`
           : '集中して撃つ敵をクリックします。もう一度クリックで解除。'
         }</div>
@@ -123,13 +125,18 @@ export function renderPanel(el: HTMLElement, p: PanelProps) {
       ${u.kind === 'mortar' ? `
       <div class="group"><h3>迫撃砲</h3>
         <div class="row">${btn('data-deploy="1"', '展開する(撃てる状態に)', !!o.deploy)}${btn('data-deploy="0"', '展開しない', !o.deploy)}</div>
+        <div class="hint">発煙弾 残り${u.smokeRounds}発(「榴弾」ボタンを押すと発煙弾に切り替わる。着弾と同時に半径${SMOKE.mortar.radius} mの煙が${SMOKE.mortar.durationSec}秒)。</div>
         <div class="hint">展開に${MORTAR.deploySec}秒、動くには撤収に${MORTAR.packSec}秒かかります。経路が残っているときは、着いてから展開します。残弾 ${u.rounds}/${MORTAR.rounds}(撃つのは「実行」の間です)。</div>
         ${(o.fireMissions ?? []).length > 0 && !o.deploy ? '<div class="hint" style="color:#ff9f43">⚠ 「展開しない」になっているので撃てません。「展開する」を押してください。</div>' : ''}
         ${(o.fireMissions ?? []).length > 0 && o.deploy && u.mortarState !== 'deployed' && o.route.length === 0 ? `<div class="hint" style="color:#ffe07a">展開に${MORTAR.deploySec}秒かかるので、最初の1発は${MORTAR.deploySec}秒後からになります。</div>` : ''}
         ${(o.fireMissions ?? []).length === 0 ? '<div class="hint">射撃命令なし(「迫撃砲の射撃」で地図をクリック)</div>' : `<ol class="wps">${(o.fireMissions ?? [])
-          .map((m, i) => `<li>${i + 1}発目<input type="number" min="0" max="10" step="1" value="${m.atSec}" data-at="${i}" />秒に発射 <button data-delmission="${i}">消す</button></li>`)
+          .map((m, i) => `<li>${i + 1}発目<input type="number" min="0" max="10" step="1" value="${m.atSec}" data-at="${i}" />秒に <button data-mkind="${i}">${m.kind === 'smoke' ? '発煙弾' : '榴弾'}</button> <button data-delmission="${i}">消す</button></li>`)
           .join('')}</ol>`}
       </div>` : ''}
+      ${u.kind === 'fireteam' && (o.smokeThrows ?? []).length > 0 ? `
+      <div class="group"><h3>発煙手榴弾(残り${u.smokeGrenades}個)</h3><ol class="wps">${(o.smokeThrows ?? [])
+        .map((m, i) => `<li>${i + 1}個目<input type="number" min="0" max="10" step="1" value="${m.atSec}" data-smokeat="${i}" />秒に投げる <button data-delsmoke="${i}">消す</button></li>`)
+        .join('')}</ol></div>` : ''}
       <div class="group"><h3>経路(点ごとの待機秒数)</h3>
         ${o.route.length === 0 ? '<div class="hint">経路なし(その場にとどまる)</div>' : `<ol class="wps">${o.route
           .map((w, i) => `<li>点${i + 1}<input type="number" min="0" max="10" step="1" value="${w.waitSec}" data-wait="${i}" />秒待つ</li>`)
@@ -173,6 +180,7 @@ export function renderPanel(el: HTMLElement, p: PanelProps) {
         <i style="background:#5b3d34"></i>建物:入れない。弾をさえぎる
         <i style="background:#5aa9ff;border-radius:1px"></i>長方形=IFV(三角が車体の前、線が砲身)。小銃は効かない。IFV の機関砲で撃たれ続けた石垣・土塁は崩れて瓦礫(軟らかい遮蔽)になる
         <i style="background:#ffb36b"></i>オレンジの小さな四角=対戦車火器を持っている班
+        <i style="background:#e6e6e1;border-radius:50%"></i>煙:視線をさえぎる(弾は通る)。中にいると外が見えず、外からも見えない
         <i style="border:2px solid #ffe07a"></i>迫撃砲の着弾範囲:内側の輪(8 m)で被害、外側の輪(15 m)で制圧。伏せると×0.5、遮蔽の内側なら×0.3
         <i style="background:#ffd60a;border-radius:50%"></i>動揺(制圧値40〜)
         <i style="background:#ff9500;border-radius:50%"></i>制圧(70〜):離脱以外では動かない
@@ -199,6 +207,21 @@ export function renderPanel(el: HTMLElement, p: PanelProps) {
   on('[data-mount]', (b) => (o.mountId = b.dataset.mount || null));
   on('[data-atuse]', (b) => (o.atAllowed = b.dataset.atuse === '1'));
   on('[data-delmission]', (b) => o.fireMissions?.splice(Number(b.dataset.delmission), 1));
+  on('[data-delsmoke]', (b) => o.smokeThrows?.splice(Number(b.dataset.delsmoke), 1));
+  on('[data-mkind]', (b) => {
+    const m = o.fireMissions?.[Number(b.dataset.mkind)];
+    if (!m) return;
+    const smokeCount = (o.fireMissions ?? []).filter((x) => x.kind === 'smoke').length;
+    if (m.kind === 'smoke') m.kind = 'he';
+    else if (smokeCount < u!.smokeRounds) m.kind = 'smoke';
+  });
+  el.querySelectorAll<HTMLInputElement>('[data-smokeat]').forEach((inp) =>
+    inp.addEventListener('change', () => {
+      const m = o.smokeThrows?.[Number(inp.dataset.smokeat)];
+      if (m) m.atSec = Math.max(0, Math.min(10, Math.round(Number(inp.value) || 0)));
+      p.onChange();
+    }),
+  );
   el.querySelectorAll<HTMLInputElement>('[data-at]').forEach((inp) =>
     inp.addEventListener('change', () => {
       const m = o.fireMissions?.[Number(inp.dataset.at)];

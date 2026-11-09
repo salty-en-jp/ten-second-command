@@ -146,6 +146,11 @@ function ambush(state: SimState, plan: AiPlan, mem: AiMemory, us: Unit[], threat
     if ((pressed || broken) && next && (!retreatedThisPhase || broken)) {
       retreatedThisPhase = true;
       mem.posIndex[u.id] = idx + 1;
+      // 下がるときは、一番近い知っている敵の方へ 15 m 先に煙を投げて姿を隠す(FM 7-8 Drill 3)
+      const smoke =
+        u.smokeGrenades > 0 && near
+          ? [{ target: { x: u.pos.x + ((near.pos.x - u.pos.x) / Math.max(1, dist(u.pos, near.pos))) * 15, y: u.pos.y + ((near.pos.y - u.pos.y) / Math.max(1, dist(u.pos, near.pos))) * 15 }, atSec: 0 }]
+          : [];
       out[u.id] = O({
         route: [wp(posOf(next))],
         withdrawRoute: [posOf(next)],
@@ -153,6 +158,7 @@ function ambush(state: SimState, plan: AiPlan, mem: AiMemory, us: Unit[], threat
         fire: 'hold',
         openFireRange: range,
         facing: next.facingDeg * DEG,
+        smokeThrows: smoke,
       });
       continue;
     }

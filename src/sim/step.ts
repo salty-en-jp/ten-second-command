@@ -11,6 +11,7 @@ import {
   PHASE_TICKS,
   WALL,
   SNIPER,
+  SMOKE,
   SUPPRESSION,
   unitStats,
   TICKS_PER_SECOND,
@@ -19,6 +20,7 @@ import { angleDiff, angleTo, dist, offsetPerimeterPoints } from './geometry';
 import { effectiveCover, insideBuilding, lineOfFire, occupies, protectingHard, protects, walkable } from './terrain';
 import { computeVision, sees } from './vision';
 import { atDecide, dismountStep, ifvDamageFactor, ifvFollowRoute, ifvFollowWithdraw, inBackblast, mountStep, onIfvDestroyed, turnToward } from './ifv';
+import { mortarSmoke, queueThrows, smokeBlocks, tryThrow, updateSmokes } from './smoke';
 import { blastEffect, inAnyCover, pointObserved, queueMissions, tryFire, updateMortarState, WARNING_TICKS } from './mortar';
 import { menAlive } from './units';
 import type { MapData, Orders, SimState, Unit, Vec2 } from './types';
@@ -38,7 +40,8 @@ function cloneUnit(u: Unit): Unit {
     lastFire: u.lastFire && { tick: u.lastFire.tick, point: { ...u.lastFire.point } },
     shot: u.shot && { ...u.shot, point: { ...u.shot.point } },
     orders: u.orders,
-    missionQueue: u.missionQueue.map((m) => ({ target: { ...m.target }, tick: m.tick })),
+    missionQueue: u.missionQueue.map((m) => ({ target: { ...m.target }, tick: m.tick, kind: m.kind })),
+    smokeQueue: u.smokeQueue.map((m) => ({ target: { ...m.target }, tick: m.tick })),
     adjustedAim: u.adjustedAim && { ...u.adjustedAim },
   };
 }
@@ -53,6 +56,7 @@ export function cloneState(s: SimState): SimState {
     units: s.units.map(cloneUnit),
     vision: s.vision,
     shells: s.shells, // 弾は書き換えずに配列ごと作り直す
+    smokes: s.smokes,
     nextShellId: s.nextShellId,
     impacts: s.impacts,
     wallDamage: { ...s.wallDamage },
@@ -70,6 +74,7 @@ export function createState(map: MapData, units: Unit[]): SimState {
     outcome: 'ongoing',
     vision: { blue: { visible: [], lastSeen: {} }, red: { visible: [], lastSeen: {} } },
     shells: [],
+    smokes: [],
     nextShellId: 1,
     impacts: [],
     wallDamage: {},
@@ -91,9 +96,11 @@ export function issueOrders(state: SimState, orders: Record<string, Orders>): Si
       ...o,
       route: o.route.map((w) => ({ pos: { ...w.pos }, waitSec: w.waitSec })),
       withdrawRoute: o.withdrawRoute.map((p) => ({ ...p })),
-      fireMissions: (o.fireMissions ?? []).map((m) => ({ target: { ...m.target }, atSec: m.atSec })),
+      fireMissions: (o.fireMissions ?? []).map((m) => ({ target: { ...m.target }, atSec: m.atSec, kind: m.kind })),
+      smokeThrows: (o.smokeThrows ?? []).map((m) => ({ target: { ...m.target }, atSec: m.atSec })),
     };
     if (u.kind === 'mortar') queueMissions(u, state.tick);
+    if (u.smokeGrenades > 0 || (o.smokeThrows ?? []).length > 0) queueThrows(u, state.tick);
     u.routeIndex = 0;
     u.waitTicksLeft = -1;
     u.withdrawIndex = 0;
@@ -229,7 +236,8 @@ function sniperDecide(
       e.kind !== 'ifv' &&
       dist(u.pos, e.pos) <= SNIPER.range &&
       angleDiff(center, angleTo(u.pos, e.pos)) <= SNIPER.arcWidth / 2 &&
-      lineOfFire(map, u.pos, e.pos),
+      lineOfFire(map, u.pos, e.pos) &&
+      !smokeBlocks(map, u.pos, e.pos),
   );
   const t =
     cands.find((e) => e.id === u.orders.focusTargetId) ??
@@ -297,7 +305,8 @@ function ifvTick(u: Unit, pu: Unit, seen: Unit[], wasShot: boolean, canFire: boo
 
   if (canFire) {
     const targets = enemies.filter(
-      (t) => known.has(t.id) && t.mountedIn === null && dist(u.pos, t.pos) <= IFV.cannonRange && lineOfFire(map, u.pos, t.pos),
+      (t) =>
+        known.has(t.id) && t.mountedIn === null && dist(u.pos, t.pos) <= IFV.cannonRange && lineOfFire(map, u.pos, t.pos) && !smokeBlocks(map, u.pos, t.pos),
     );
     if (u.orders.focusTargetId !== null && !targets.some((t) => t.id === u.orders.focusTargetId) && !enemies.some((t) => t.id === u.orders.focusTargetId)) {
       u.orders = { ...u.orders, focusTargetId: null };
@@ -357,7 +366,8 @@ export function step(state: SimState): SimState {
     if (!v.alive) continue;
     if (v.shot?.targetId) {
       const t = prevById.get(v.shot.targetId);
-      if (t) known[t.side].add(v.id);
+      // 撃ってきた敵は見えていなくても撃ち返せる。ただし煙越しには撃ち返せない(煙の意味がなくなるため)
+      if (t && !smokeBlocks(map, v.pos, t.pos)) known[t.side].add(v.id);
     }
   }
 
@@ -470,6 +480,11 @@ export function step(state: SimState): SimState {
 
     // 射撃目標:陣営が知っている敵のうち、射程内で射線の通る敵
     const inContact = u.activity !== 'route' && u.activity !== 'reacting';
+    // 発煙手榴弾(射撃班)
+    if (u.kind === 'fireteam' && u.smokeQueue.length > 0) {
+      const cloud = tryThrow(u, s.tick + 1, isPinned(u));
+      if (cloud) s.smokes = [...s.smokes, cloud];
+    }
     if (u.kind === 'mortar') {
       const shell = tryFire(u, s.tick + 1, map, s.nextShellId, isPinned(u));
       if (shell) {
@@ -487,6 +502,8 @@ export function step(state: SimState): SimState {
           // 迫撃砲班の小銃は自衛用:有効射程(100 m)の中の敵だけを撃つ
           dist(u.pos, e.pos) < (u.kind === 'mortar' ? FIRETEAM.effectiveRange : FIRETEAM.maxRange) &&
           lineOfFire(map, u.pos, e.pos) &&
+          // 煙の向こうの敵は狙って撃てない(最終確認位置への制圧射撃はできる)
+          !smokeBlocks(map, u.pos, e.pos) &&
           // 釘付けなら、効いている遮蔽の内側からの盲射だけ
           (!pinned || effectiveCover(map, u.pos, e.pos) !== null),
       );
@@ -643,6 +660,19 @@ export function step(state: SimState): SimState {
   }
   for (const sh of landed) {
     shooterId = sh.shooterId;
+    if (sh.kind === 'smoke') {
+      // 発煙弾:着弾と同時に煙が立つ。ダメージはなく、近くの者の制圧値だけが上がる(白リンの心理的効果)
+      s.smokes = [...s.smokes, mortarSmoke(sh.impact, nextTick, sh.id)];
+      for (const t of s.units) {
+        if (!t.alive || t.mountedIn !== null || dist(t.pos, sh.impact) > SMOKE.mortar.suppressRadius) continue;
+        const directFire = supp.has(t.id);
+        hit(t.id, 0, SMOKE.mortar.suppression, sh.impact, true);
+        if (!directFire) shelled.add(t.id);
+      }
+      const shooter = s.units.find((u) => u.id === sh.shooterId);
+      if (shooter && pointObserved(s, sh.side, sh.aim)) shooter.adjustedAim = { ...sh.aim };
+      continue;
+    }
     for (const t of s.units) {
       if (!t.alive || t.mountedIn !== null) continue;
       if (t.kind === 'ifv') {
@@ -712,6 +742,7 @@ export function step(state: SimState): SimState {
     }
   }
   s.tick++;
+  updateSmokes(s);
   s.vision = computeVision(s);
 
   // ---- 5. 勝敗

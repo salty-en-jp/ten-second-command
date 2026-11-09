@@ -36,6 +36,8 @@ import {
   drawIncomingWarning,
   drawMortarRange,
   drawShells,
+  drawSmokes,
+  drawSmokeThrows,
   drawOrders,
   drawShots,
   drawTerrain,
@@ -237,7 +239,11 @@ export class App {
       x: Math.max(0, Math.min(this.view.map.width, p.x)),
       y: Math.max(0, Math.min(this.view.map.height, p.y)),
     };
-    if (this.tool === 'mortar') {
+    if (this.tool === 'smoke') {
+      const ts = (o.smokeThrows ??= []);
+      const last = ts.at(-1);
+      ts.push({ target: clamped, atSec: last ? Math.min(10, last.atSec + 2) : 0 });
+    } else if (this.tool === 'mortar') {
       const ms = (o.fireMissions ??= []);
       const last = ms.at(-1);
       ms.push({ target: clamped, atSec: last ? Math.min(10, last.atSec + 2) : 0 });
@@ -256,7 +262,8 @@ export class App {
     if (this.mode !== 'planning' || !this.selected) return;
     const o = this.drafts[this.selected];
     if (!o) return;
-    if (this.tool === 'mortar') o.fireMissions?.pop();
+    if (this.tool === 'smoke') o.smokeThrows?.pop();
+    else if (this.tool === 'mortar') o.fireMissions?.pop();
     else if (this.tool === 'withdraw') o.withdrawRoute.pop();
     else o.route.pop();
     this.changed();
@@ -391,12 +398,15 @@ export class App {
         if (f) for (const g of f.units) drawUnit(v, g, { ghost: true });
       }
     }
+    // 煙
+    drawSmokes(v, frame.smokes, frame.tick);
     // 迫撃砲:味方の弾の着弾予定位置、着弾、計画中の射撃、射程
     drawShells(v, frame.shells, 'blue', frame.tick);
     drawImpacts(v, frame.impacts, frame.tick);
     if (this.mode === 'planning') {
       for (const u of units) {
         const o = this.drafts[u.id];
+        if (o && (o.smokeThrows ?? []).length + u.smokeGrenades > 0 && u.side === 'blue') drawSmokeThrows(v, u, o.smokeThrows ?? [], u.id === this.selected && this.tool === 'smoke');
         if (u.kind !== 'mortar' || !o) continue;
         if (u.id === this.selected) drawMortarRange(v, u);
         drawFireMissions(v, u, o.fireMissions ?? []);

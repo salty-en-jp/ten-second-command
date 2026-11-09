@@ -1,7 +1,7 @@
 /**
  * 描画:sim の状態を読んで Canvas に描くだけ。状態は書き換えない。
  */
-import { MORTAR, SNIPER, SUPPRESSION, unitStats, type Shell, type MapData, type Orders, type SimState, type TerrainKind, type Unit, type Vec2 } from '../sim';
+import { MORTAR, SMOKE, SNIPER, SUPPRESSION, unitStats, type Shell, type SmokeCloud, type MapData, type Orders, type SimState, type TerrainKind, type Unit, type Vec2 } from '../sim';
 import { menAlive } from '../sim/units';
 
 export interface View {
@@ -190,6 +190,71 @@ export interface UnitDrawOptions {
   arcCenter?: number;
 }
 
+/** 煙:立っている煙は灰色の雲、これから立つ煙は点線と残り秒数 */
+export function drawSmokes(v: View, smokes: SmokeCloud[], tick: number) {
+  const { ctx, scale } = v;
+  for (const c of smokes) {
+    const p = toScreen(v, c.pos);
+    ctx.save();
+    if (c.startTick <= tick) {
+      const left = (c.endTick - tick) / 20;
+      ctx.globalAlpha = Math.min(1, left / 3) * 0.78; // 消える前の3秒で薄くなる
+      const g = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, c.r * scale);
+      g.addColorStop(0, 'rgba(230,230,225,1)');
+      g.addColorStop(0.75, 'rgba(210,210,205,0.95)');
+      g.addColorStop(1, 'rgba(200,200,195,0.4)');
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, c.r * scale, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = '#333';
+      ctx.font = '10px system-ui';
+      ctx.textAlign = 'center';
+      ctx.fillText(`煙 ${left.toFixed(0)}秒`, p.x, p.y + 3);
+    } else {
+      ctx.strokeStyle = 'rgba(230,230,225,0.8)';
+      ctx.setLineDash([3, 3]);
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, c.r * scale, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.fillStyle = '#fff';
+      ctx.font = '10px system-ui';
+      ctx.textAlign = 'center';
+      ctx.fillText(`煙まで ${((c.startTick - tick) / 20).toFixed(1)}秒`, p.x, p.y + 3);
+    }
+    ctx.restore();
+  }
+}
+
+/** 計画中の発煙手榴弾(投げる地点と、届く範囲の輪) */
+export function drawSmokeThrows(v: View, u: Unit, throws: Array<{ target: Vec2; atSec: number }>, selected: boolean) {
+  const { ctx, scale } = v;
+  ctx.save();
+  if (selected && u.smokeGrenades > 0) {
+    const p = toScreen(v, u.pos);
+    ctx.strokeStyle = 'rgba(230,230,225,0.35)';
+    ctx.setLineDash([2, 5]);
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, SMOKE.grenade.throwRange * scale, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+  ctx.setLineDash([4, 3]);
+  for (const t of throws) {
+    const p = toScreen(v, t.target);
+    const ok = Math.hypot(t.target.x - u.pos.x, t.target.y - u.pos.y) <= SMOKE.grenade.throwRange;
+    ctx.strokeStyle = ok ? 'rgba(230,230,225,0.9)' : 'rgba(255,90,70,0.9)';
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, SMOKE.grenade.radius * scale, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.fillStyle = '#fff';
+    ctx.font = '11px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText(ok ? `煙:${t.atSec}秒に投げる` : '煙:届かない(30 m まで)', p.x, p.y - SMOKE.grenade.radius * scale - 4);
+  }
+  ctx.restore();
+}
+
 /** 迫撃砲の射程(最小・最大)の輪 */
 export function drawMortarRange(v: View, u: Unit) {
   const { ctx, scale } = v;
@@ -236,17 +301,18 @@ function blastMarker(v: View, at: Vec2, color: string, text: string, dashed: boo
 }
 
 /** 計画中の射撃命令(観測が済んでいない地点は、遠くへずれる見込みも示す) */
-export function drawFireMissions(v: View, u: Unit, missions: Array<{ target: Vec2; atSec: number }>) {
-  // 同じ地点(1 m 以内)への命令はまとめて1つの印にする
-  const groups: Array<{ target: Vec2; times: number[] }> = [];
+export function drawFireMissions(v: View, u: Unit, missions: Array<{ target: Vec2; atSec: number; kind?: 'he' | 'smoke' }>) {
+  // 同じ地点(1 m 以内)・同じ弾の種類の命令はまとめて1つの印にする
+  const groups: Array<{ target: Vec2; times: number[]; smoke: boolean }> = [];
   for (const m of missions) {
-    const g = groups.find((x) => Math.hypot(x.target.x - m.target.x, x.target.y - m.target.y) < 1);
+    const smoke = m.kind === 'smoke';
+    const g = groups.find((x) => x.smoke === smoke && Math.hypot(x.target.x - m.target.x, x.target.y - m.target.y) < 1);
     if (g) g.times.push(m.atSec);
-    else groups.push({ target: m.target, times: [m.atSec] });
+    else groups.push({ target: m.target, times: [m.atSec], smoke });
   }
   groups.forEach((m) => {
     const adjusted = u.adjustedAim && Math.hypot(u.adjustedAim.x - m.target.x, u.adjustedAim.y - m.target.y) <= MORTAR.adjustRadius;
-    blastMarker(v, m.target, '#ffe07a', `${m.times.length}発:${m.times.join('・')}秒に発射${adjusted ? '' : '(観測が済むまでは遠くへずれる)'}`, !adjusted);
+    blastMarker(v, m.target, m.smoke ? '#e6e6e1' : '#ffe07a', `${m.smoke ? '発煙弾' : ''}${m.times.length}発:${m.times.join('・')}秒に発射${adjusted ? '' : '(観測が済むまでは遠くへずれる)'}`, !adjusted);
     if (!adjusted) {
       const d = Math.hypot(m.target.x - u.pos.x, m.target.y - u.pos.y) || 1;
       const off = { x: m.target.x + ((m.target.x - u.pos.x) / d) * MORTAR.unobservedError, y: m.target.y + ((m.target.y - u.pos.y) / d) * MORTAR.unobservedError };
