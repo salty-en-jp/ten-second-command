@@ -44,7 +44,9 @@ export interface StageData {
   aiLabel?: { name: string; description: string; hint: string };
   /** 防衛線:守る側と、攻める側が越えたら負けになる y */
   defenseLine?: { defender: Side; y: number };
-  /** 配置可能エリア(後の段階で使う) */
+  /** 配置フェイズがあるか(true なら、ステージの始めに配置可能エリアの中で味方を置き直せる) */
+  deployment?: boolean;
+  /** 配置可能エリア */
   deployZone?: { x: number; y: number; w: number; h: number };
 }
 

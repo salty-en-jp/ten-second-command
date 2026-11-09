@@ -11,7 +11,9 @@ interface PanelProps {
   vision: SideVision;
   tick: number;
   revealAll: boolean;
-  mode: 'planning' | 'executing' | 'over';
+  mode: 'deploying' | 'planning' | 'executing' | 'over';
+  canRedeploy?: boolean;
+  onRedeploy?(): void;
   outcomeText: string;
   units: Unit[];
   selected: string | null;
@@ -76,7 +78,7 @@ export function renderPanel(el: HTMLElement, p: PanelProps) {
            このミッションの最高:${starText(r.best)}</div>
            <div class="hint">★1 勝利 / ★2 目標フェイズ以内 / ★3 さらに全滅した班なし・失った耐久30%以下</div>`
         : '';
-    html += `<div class="overlay">${p.outcomeText}${evalHtml}<div class="row" style="justify-content:center"><button class="primary" data-act="retry">同じ配置からやり直す</button><a href="#"><button>ミッション選択へ</button></a></div></div>`;
+    html += `<div class="overlay">${p.outcomeText}${evalHtml}<div class="row" style="justify-content:center"><button class="primary" data-act="retry">同じ配置からやり直す</button>${p.canRedeploy ? '<button data-act="redeploy">配置からやり直す</button>' : ''}<a href="#"><button>ミッション選択へ</button></a></div></div>`;
   }
   html += `<div class="group"><h3>部隊の状態</h3>${[...blue, ...red].map(status).join('')}</div>`;
 
@@ -155,6 +157,10 @@ export function renderPanel(el: HTMLElement, p: PanelProps) {
           .map((r) => btn(`data-focus="${r.id}"`, label(r), o.focusTargetId === r.id))
           .join('')}</div>
       </div>`;
+  } else if (p.mode === 'deploying') {
+    html += `<div class="group"><h3>配置する部隊</h3>
+      <div class="row units">${blue.filter((x) => x.alive && x.mountedIn === null).map((x) => btn(`data-sel="${x.id}"`, label(x), x.id === p.selected)).join('')}</div>
+      <div class="hint">選んだ部隊を、地図の点線の配置エリアの中に置きます。建物や石垣の上には置けません。敵から見える場所に置くと、最初から見つかっています。</div></div>`;
   } else if (p.mode === 'executing') {
     html += `<div class="hint">実行中です。10秒たつと止まり、次の命令を出せます。</div>`;
   }
@@ -178,6 +184,7 @@ export function renderPanel(el: HTMLElement, p: PanelProps) {
   el.innerHTML = html;
 
   el.querySelector('[data-act=retry]')?.addEventListener('click', p.onRetry);
+  el.querySelector('[data-act=redeploy]')?.addEventListener('click', () => p.onRedeploy?.());
   el.querySelectorAll<HTMLElement>('[data-sel]').forEach((b) => b.addEventListener('click', () => p.onSelect(b.dataset.sel!)));
   el.querySelectorAll<HTMLElement>('[data-tool]').forEach((b) => b.addEventListener('click', () => p.onTool(b.dataset.tool as Tool)));
   if (!o) return;

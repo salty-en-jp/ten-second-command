@@ -10,3 +10,4 @@ export * from './mortar';
 export * from './ifv';
 export * from './ai';
 export * from './evaluate';
+export * from './deploy';

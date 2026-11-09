@@ -5,6 +5,8 @@
 import {
   issueOrders,
   loadStage,
+  deployUnit,
+  canDeployAt,
   planAi,
   evaluate,
   type Evaluation,
@@ -24,6 +26,7 @@ import {
 } from '../sim';
 import {
   drawDeployZone,
+  drawDeployGhost,
   drawDefenseLine,
   drawLastSeen,
   drawUnseenFire,
@@ -45,7 +48,7 @@ import { draftsFor, label, setLabels } from './orders';
 import { saveBest } from './storage';
 import { renderPanel, type Tool } from './panel';
 
-type Mode = 'planning' | 'executing' | 'over';
+type Mode = 'deploying' | 'planning' | 'executing' | 'over';
 
 export class App {
   private stage: StageData;
@@ -80,12 +83,20 @@ export class App {
     setLabels(stage.units);
     canvas.style.aspectRatio = `${stage.width} / ${stage.height}`;
     this.initial = loadStage(stage);
-    this.current = planAi(this.initial, stage); // 敵 AI は計画フェイズの開始時に命令を出す
+    if (stage.deployment && stage.deployZone) {
+      // 配置フェイズ:敵 AI はまだ命令を出さない(配置が決まってから考える)
+      this.mode = 'deploying';
+      this.current = this.initial;
+    } else {
+      this.current = planAi(this.initial, stage); // 敵 AI は計画フェイズの開始時に命令を出す
+    }
     this.drafts = draftsFor(this.current);
     const ctx = canvas.getContext('2d')!;
     this.view = { ctx, scale: 1, map: this.initial.map };
     new ResizeObserver(() => this.resize()).observe(canvas);
     canvas.addEventListener('pointerdown', (e) => this.onPointer(e));
+    canvas.addEventListener('pointermove', (e) => this.onDeployMove(e));
+    canvas.addEventListener('pointerup', (e) => this.onDeployUp(e));
     canvas.addEventListener('contextmenu', (e) => {
       e.preventDefault();
       this.undoPoint();
@@ -113,7 +124,75 @@ export class App {
     return this.current.units.find((u) => u.id === this.selected && u.alive);
   }
 
+  // ------------------------------------------------------------ 配置フェイズ
+
+  private dragging: string | null = null;
+  private dragPos: Vec2 | null = null;
+
+  private worldOf(e: PointerEvent): Vec2 {
+    const r = this.canvas.getBoundingClientRect();
+    return toWorld(this.view, e.clientX - r.left, e.clientY - r.top);
+  }
+
+  private deployableUnitAt(p: Vec2) {
+    return this.current.units
+      .filter((u) => u.side === 'blue' && u.alive && u.mountedIn === null)
+      .map((u) => ({ u, d: dist(u.pos, p) }))
+      .filter((x) => x.d < 5)
+      .sort((a, b) => a.d - b.d)[0]?.u;
+  }
+
+  /** 配置フェイズ:部隊を押さえたらドラッグ開始。何もない所を押したら、選んでいる部隊をそこへ置く */
+  private onDeployDown(e: PointerEvent) {
+    const p = this.worldOf(e);
+    const u = this.deployableUnitAt(p);
+    if (u) {
+      this.selected = u.id;
+      this.dragging = u.id;
+      this.dragPos = p;
+      this.canvas.setPointerCapture?.(e.pointerId);
+    } else if (this.selected) {
+      this.current = deployUnit(this.current, this.stage.deployZone!, this.selected, p);
+    }
+    this.refreshUI();
+  }
+
+  private onDeployMove(e: PointerEvent) {
+    if (this.mode !== 'deploying' || !this.dragging) return;
+    this.dragPos = this.worldOf(e);
+  }
+
+  private onDeployUp(e: PointerEvent) {
+    if (this.mode !== 'deploying' || !this.dragging) return;
+    this.current = deployUnit(this.current, this.stage.deployZone!, this.dragging, this.worldOf(e));
+    this.dragging = null;
+    this.dragPos = null;
+    this.refreshUI();
+  }
+
+  /** 配置完了:この配置を「やり直し」の出発点にして、計画フェイズへ */
+  finishDeployment() {
+    this.initial = this.current;
+    this.current = planAi(this.initial, this.stage);
+    this.drafts = draftsFor(this.current);
+    this.mode = 'planning';
+    this.recomputePreview();
+    this.refreshUI();
+  }
+
+  /** 配置からやり直す */
+  redeploy() {
+    this.initial = loadStage(this.stage);
+    this.current = this.initial;
+    this.result = null;
+    this.frames = [];
+    this.phase = 1;
+    this.mode = 'deploying';
+    this.refreshUI();
+  }
+
   private onPointer(e: PointerEvent) {
+    if (this.mode === 'deploying') return this.onDeployDown(e);
     if (this.mode !== 'planning') return;
     const r = this.canvas.getBoundingClientRect();
     const p = toWorld(this.view, e.clientX - r.left, e.clientY - r.top);
@@ -265,7 +344,7 @@ export class App {
     const terrainFrame = this.mode === 'executing' && this.frames.length > 0 ? this.frames[Math.min(Math.floor(this.playTick) + 1, this.frames.length - 1)]! : this.current;
     v.map = terrainFrame.map;
     drawTerrain(v);
-    if (this.mode === 'planning' && this.phase === 1) drawDeployZone(v, this.stage.deployZone);
+    if (this.mode === 'deploying' || (this.mode === 'planning' && this.phase === 1)) drawDeployZone(v, this.stage.deployZone, this.mode === 'deploying');
     if (this.current.defenseLine) drawDefenseLine(v, this.current.defenseLine.y);
 
     let units: Unit[];
@@ -335,7 +414,7 @@ export class App {
     for (const u of units) {
       if (!shown(u)) continue;
       drawUnit(v, u, {
-        selected: this.mode === 'planning' && u.id === this.selected,
+        selected: (this.mode === 'planning' || this.mode === 'deploying') && u.id === this.selected,
         label: label(u),
         showArc: u.alive && (u.side === 'red' || u.id === this.selected || this.mode === 'executing'),
         arcCenter: this.mode === 'planning' ? (this.drafts[u.id]?.facing ?? undefined) : undefined,
@@ -344,6 +423,14 @@ export class App {
           (this.showSight === 'all' ||
             (this.showSight === 'selected' && (u.id === this.selected || u.side === 'red'))),
       });
+    }
+    // 配置フェイズ:ドラッグ中の部隊を置く先(置けない場所なら赤)
+    if (this.mode === 'deploying' && this.dragging && this.dragPos) {
+      const u = units.find((x) => x.id === this.dragging);
+      if (u) {
+        const ok = canDeployAt(this.current, this.stage.deployZone!, this.dragPos);
+        drawDeployGhost(v, { ...u, pos: this.dragPos }, ok);
+      }
     }
   }
 
@@ -373,6 +460,19 @@ export class App {
 
     // タイムライン
     const planning = this.mode === 'planning';
+    if (this.mode === 'deploying') {
+      this.timeline.innerHTML = `<button class="primary" data-act="deployed">✔ 配置完了(計画フェイズへ)</button>
+        <span class="hint">部隊を点線の配置エリアの中でドラッグして置いてください(スマホは、部隊をタップしてから置きたい場所をタップ)。置いた場所から見える敵だけが表示されます。</span>`;
+      this.timeline.querySelector('[data-act=deployed]')?.addEventListener('click', () => this.finishDeployment());
+      this.status.textContent = (this.stage.aiLabel ? `敵:${this.stage.aiLabel.name}  ` : '') + '配置フェイズ';
+      renderPanel(this.panel, {
+        result: null, vision: this.current.vision.blue, tick: 0, revealAll: false, mode: 'deploying', outcomeText: '',
+        units: this.current.units, selected: this.selected, drafts: {}, tool: this.tool,
+        onSelect: (id) => { this.selected = id; this.refreshUI(); },
+        onTool: () => {}, onChange: () => {}, onRetry: () => this.retry(),
+      });
+      return;
+    }
     this.timeline.innerHTML = `
       <button class="primary" data-act="exec" ${planning ? '' : 'disabled'}>▶ 実行(${PHASE_SECONDS}秒)</button>
       <input type="range" min="0" max="${PHASE_TICKS}" step="1" value="${this.mode === 'executing' ? Math.floor(this.playTick) : this.scrubTick}" ${planning ? '' : 'disabled'} title="予定位置のプレビュー" />
@@ -438,6 +538,8 @@ export class App {
       : '';
     renderPanel(this.panel, {
       result: this.result,
+      canRedeploy: !!this.stage.deployment,
+      onRedeploy: () => this.redeploy(),
       vision: frame.vision.blue,
       tick: frame.tick,
       revealAll: this.revealAll,
