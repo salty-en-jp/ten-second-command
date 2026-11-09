@@ -78,14 +78,16 @@ export function renderPanel(el: HTMLElement, p: PanelProps) {
           p.tool === 'route' ? '地図をクリックすると経路の点を足します。右クリックか「最後の点を消す」で取り消せます。'
           : p.tool === 'facing' ? (u.kind === 'sniper' ? '撃つ方向をクリックします。黄色い細い扇形(幅30°)の中に入った敵だけを撃ちます。' : '向かせたい方向をクリックします(経路の終点から)。')
           : p.tool === 'withdraw' ? '「離脱」のときに下がる経路をクリックで足します。右クリックで消します。'
-          : p.tool === 'mortar' ? `着弾させたい場所をクリックします(1回で1発、2秒おき)。射程は${MORTAR.minRange}〜${MORTAR.maxRange} m、発射から${MORTAR.flightSec}秒で着弾。味方のだれかがその場所を見ていないと、遠くへずれます(点線の矢印)。右クリックで最後の1発を取り消し。`
+          : p.tool === 'mortar' ? `着弾させたい場所をクリックします(1回で1発、2秒おき。自動で「展開する」になります)。射程は${MORTAR.minRange}〜${MORTAR.maxRange} m、発射から${MORTAR.flightSec}秒で着弾。味方のだれかがその場所を見ていないと、遠くへずれます(点線の矢印)。右クリックで最後の1発を取り消し。`
           : '集中して撃つ敵をクリックします。もう一度クリックで解除。'
         }</div>
       </div>
       ${u.kind === 'mortar' ? `
       <div class="group"><h3>迫撃砲</h3>
         <div class="row">${btn('data-deploy="1"', '展開する(撃てる状態に)', !!o.deploy)}${btn('data-deploy="0"', '展開しない', !o.deploy)}</div>
-        <div class="hint">展開に${MORTAR.deploySec}秒、動くには撤収に${MORTAR.packSec}秒かかります。経路が残っているときは、着いてから展開します。残弾 ${u.rounds}/${MORTAR.rounds}。</div>
+        <div class="hint">展開に${MORTAR.deploySec}秒、動くには撤収に${MORTAR.packSec}秒かかります。経路が残っているときは、着いてから展開します。残弾 ${u.rounds}/${MORTAR.rounds}(撃つのは「実行」の間です)。</div>
+        ${(o.fireMissions ?? []).length > 0 && !o.deploy ? '<div class="hint" style="color:#ff9f43">⚠ 「展開しない」になっているので撃てません。「展開する」を押してください。</div>' : ''}
+        ${(o.fireMissions ?? []).length > 0 && o.deploy && u.mortarState !== 'deployed' && o.route.length === 0 ? `<div class="hint" style="color:#ffe07a">展開に${MORTAR.deploySec}秒かかるので、最初の1発は${MORTAR.deploySec}秒後からになります。</div>` : ''}
         ${(o.fireMissions ?? []).length === 0 ? '<div class="hint">射撃命令なし(「迫撃砲の射撃」で地図をクリック)</div>' : `<ol class="wps">${(o.fireMissions ?? [])
           .map((m, i) => `<li>${i + 1}発目<input type="number" min="0" max="10" step="1" value="${m.atSec}" data-at="${i}" />秒に発射 <button data-delmission="${i}">消す</button></li>`)
           .join('')}</ol>`}

@@ -155,6 +155,7 @@ export class App {
       const ms = (o.fireMissions ??= []);
       const last = ms.at(-1);
       ms.push({ target: clamped, atSec: last ? Math.min(10, last.atSec + 2) : 0 });
+      o.deploy = true; // 撃つには展開が必要なので、射撃を命じたら自動で展開する
     } else if (this.tool === 'route') o.route.push({ pos: clamped, waitSec: 0 });
     else if (this.tool === 'withdraw') o.withdrawRoute.push(clamped);
     else if (this.tool === 'facing') {
