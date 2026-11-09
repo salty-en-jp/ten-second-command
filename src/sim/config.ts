@@ -101,5 +101,14 @@ export const BLIND_FIRE = {
   suppression: 0.2,
 } as const;
 
+/** 視界。design.md 4.1 */
+export const VISION = {
+  /** 茂みの中にいる目標は、この倍率の距離まで近づかないと発見できない */
+  concealmentFactor: 0.5,
+  /** 発砲したユニットは、この秒数のあいだ発見距離が伸びる */
+  fireExposureSec: 2,
+  fireExposureFactor: 2,
+} as const;
+
 /** 移動の到着判定(m) */
 export const ARRIVE_EPSILON = 0.01;

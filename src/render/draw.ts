@@ -239,6 +239,52 @@ export function drawUnit(v: View, u: Unit, opt: UnitDrawOptions = {}) {
   ctx.restore();
 }
 
+/** 見えなくなった敵の最終確認位置(何秒前か付き) */
+export function drawLastSeen(v: View, side: 'blue' | 'red', pos: Vec2, secondsAgo: number, name: string) {
+  const { ctx, scale } = v;
+  const p = toScreen(v, pos);
+  const r = Math.max(5, 2.6 * scale);
+  ctx.save();
+  ctx.strokeStyle = SIDE_COLOR[side];
+  ctx.globalAlpha = 0.7;
+  ctx.setLineDash([3, 3]);
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle = '#fff';
+  ctx.font = '11px system-ui';
+  ctx.textAlign = 'center';
+  ctx.fillText(`${name}?`, p.x, p.y - r - 6);
+  ctx.fillStyle = 'rgba(255,255,255,0.75)';
+  ctx.fillText(`${secondsAgo.toFixed(0)}秒前`, p.x, p.y + r + 12);
+  ctx.restore();
+}
+
+/**
+ * 視界の外から撃たれたときの、おおまかな射撃方向(design.md 4.1)。
+ * 正確な位置がわからないよう、方向を 15° 刻みに丸めて ±20° の扇形で示す。
+ */
+export function drawUnseenFire(v: View, target: Vec2, from: Vec2) {
+  const { ctx, scale } = v;
+  const step = (15 * Math.PI) / 180;
+  const a = Math.round(Math.atan2(from.y - target.y, from.x - target.x) / step) * step;
+  const half = (20 * Math.PI) / 180;
+  const p = toScreen(v, target);
+  ctx.save();
+  const g = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, 60 * scale);
+  g.addColorStop(0, 'rgba(255,80,60,0.35)');
+  g.addColorStop(1, 'rgba(255,80,60,0)');
+  ctx.fillStyle = g;
+  ctx.beginPath();
+  ctx.moveTo(p.x, p.y);
+  ctx.arc(p.x, p.y, 60 * scale, -a - half, -a + half);
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+}
+
 /** 計画中の経路(ウェイポイントと待機秒数、離脱経路、向き、火力の集中) */
 export function drawOrders(v: View, u: Unit, o: Orders, selected: boolean, targets: Unit[]) {
   const { ctx } = v;
