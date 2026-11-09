@@ -1,0 +1,22 @@
+{
+  "name": "農村の石垣 改(MVP)",
+  "width": 200,
+  "height": 150,
+  "features": [
+    { "id": "f1", "kind": "hard", "note": "石垣。敵1班の陣地", "rect": { "cx": 85, "cy": 100, "w": 36, "h": 1 } },
+    { "id": "f2", "kind": "hard", "note": "土塁。味方の陣地。裏側は敵から見えない", "rect": { "cx": 100, "cy": 40, "w": 40, "h": 2 } },
+    { "id": "f3", "kind": "hard", "note": "西の沈み道の石垣。回り込みの道を敵の目から隠す", "rect": { "cx": 42, "cy": 67, "w": 1.5, "h": 74 } },
+    { "id": "f4", "kind": "hard", "note": "瓦礫。敵1班を横から撃つ位置", "rect": { "cx": 63, "cy": 106, "w": 1.5, "h": 6 } },
+    { "id": "f5", "kind": "building", "note": "納屋。敵2班から西の側面が見えない死角を作る", "rect": { "cx": 100, "cy": 114, "w": 14, "h": 10 } },
+    { "id": "f6", "kind": "hard", "note": "石垣。敵2班の少し下がった陣地", "rect": { "cx": 130, "cy": 118, "w": 14, "h": 2 } },
+    { "id": "f7", "kind": "soft", "note": "東の木柵。隠れて回れそうに見えるが、弾も視線も通る(罠の迂回路)", "rect": { "cx": 160, "cy": 80, "w": 1, "h": 50 } },
+    { "id": "f8", "kind": "concealment", "note": "果樹林。視界ルールの導入後に効く", "rect": { "cx": 165, "cy": 130, "w": 20, "h": 15 } }
+  ],
+  "units": [
+    { "id": "b1", "side": "blue", "x": 100, "y": 34, "facingDeg": 90 },
+    { "id": "b2", "side": "blue", "x": 36, "y": 38, "facingDeg": 90 },
+    { "id": "r1", "side": "red", "x": 85, "y": 101.6, "facingDeg": -90, "orders": { "fire": "free", "policy": "hold" } },
+    { "id": "r2", "side": "red", "x": 130, "y": 120.3, "facingDeg": -110, "orders": { "fire": "free", "policy": "hold" } }
+  ],
+  "deployZone": { "x": 30, "y": 5, "w": 100, "h": 34 }
+}
