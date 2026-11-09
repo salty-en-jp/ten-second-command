@@ -309,6 +309,11 @@ export function step(state: SimState): SimState {
           // 釘付けなら、効いている遮蔽の内側からの盲射だけ
           (!pinned || effectiveCover(map, u.pos, e.pos) !== null),
       );
+      // 倒れた敵の最終確認位置は撃たない
+      if (u.lastKnownTargetId !== null && !prevById.get(u.lastKnownTargetId)?.alive) {
+        u.lastKnownTargetId = null;
+        u.lastKnownTargetPos = null;
+      }
       // 火力の集中:指定した敵が倒れたら指定を解除する
       if (u.orders.focusTargetId !== null && !prevById.get(u.orders.focusTargetId)?.alive) {
         u.orders = { ...u.orders, focusTargetId: null };
@@ -410,9 +415,13 @@ export function step(state: SimState): SimState {
   }
 
   // ---- 4. 勝敗
-  const blue = s.units.some((u) => u.alive && u.side === 'blue');
-  const red = s.units.some((u) => u.alive && u.side === 'red');
-  s.outcome = blue && red ? 'ongoing' : blue ? 'blueWin' : red ? 'redWin' : 'draw';
+  // 片方の陣営がそもそもいない状態(計画フェイズのプレビュー)では勝敗を決めない
+  const has = (side: 'blue' | 'red') => s.units.some((u) => u.side === side);
+  if (has('blue') && has('red')) {
+    const blue = s.units.some((u) => u.alive && u.side === 'blue');
+    const red = s.units.some((u) => u.alive && u.side === 'red');
+    s.outcome = blue && red ? 'ongoing' : blue ? 'blueWin' : red ? 'redWin' : 'draw';
+  }
   s.tick++;
   return s;
 }

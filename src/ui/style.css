@@ -1,0 +1,90 @@
+:root {
+  --bg: #1d211c;
+  --panel: #262b25;
+  --line: #3b4239;
+  --text: #e6e8e1;
+  --muted: #9aa294;
+  --blue: #5aa9ff;
+  --red: #ff6b5a;
+  --accent: #e8c45a;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: system-ui, -apple-system, "Hiragino Sans", "Noto Sans JP", sans-serif;
+  font-size: 14px;
+}
+header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--line);
+}
+h1 { margin: 0; font-size: 18px; }
+h1 .sub { font-size: 12px; color: var(--muted); font-weight: normal; }
+#status { color: var(--accent); font-weight: bold; }
+main {
+  display: flex;
+  gap: 12px;
+  padding: 12px 16px;
+  align-items: flex-start;
+}
+#field { flex: 1 1 auto; min-width: 0; }
+#map {
+  display: block;
+  width: 100%;
+  aspect-ratio: 200 / 150;
+  background: #4d5a3c;
+  border-radius: 6px;
+  touch-action: none;
+  cursor: crosshair;
+}
+#panel {
+  flex: 0 0 300px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 12px;
+}
+@media (max-width: 820px) {
+  main { flex-direction: column; }
+  #panel { flex: none; width: 100%; }
+}
+#timeline {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+#timeline input[type=range] { flex: 1 1 200px; }
+.time { font-variant-numeric: tabular-nums; min-width: 7em; }
+button {
+  background: #343b33;
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 6px 10px;
+  font: inherit;
+  cursor: pointer;
+}
+button:hover { border-color: var(--muted); }
+button.on { background: #4a5a3a; border-color: var(--accent); }
+button.primary { background: #6b5a1e; border-color: var(--accent); font-weight: bold; }
+button:disabled { opacity: 0.4; cursor: default; }
+.row { display: flex; gap: 6px; flex-wrap: wrap; margin: 6px 0; }
+.group { margin: 12px 0; }
+.group h3 { margin: 0 0 4px; font-size: 13px; color: var(--muted); font-weight: normal; }
+.units button { flex: 1; }
+.hint { color: var(--muted); font-size: 12px; line-height: 1.6; }
+.wps { margin: 4px 0; padding: 0; list-style: none; }
+.wps li { display: flex; align-items: center; gap: 6px; margin: 2px 0; }
+.wps input { width: 4em; background: #1d211c; color: var(--text); border: 1px solid var(--line); border-radius: 3px; padding: 2px 4px; }
+.legend { display: grid; grid-template-columns: 16px 1fr; gap: 3px 6px; align-items: center; font-size: 12px; color: var(--muted); }
+.legend i { display: inline-block; width: 14px; height: 10px; border-radius: 2px; }
+.overlay { font-size: 16px; padding: 10px; border: 1px solid var(--accent); border-radius: 6px; margin-bottom: 10px; text-align: center; }
