@@ -49,6 +49,11 @@ export function lineOfFire(map: MapData, a: Vec2, b: Vec2): boolean {
   return true;
 }
 
+/** p にいる者を from からの射撃から守っている硬い遮蔽物(なければ null) */
+export function protectingHard(map: MapData, p: Vec2, from: Vec2): TerrainFeature | null {
+  return map.features.find((f) => f.kind === 'hard' && protects(p, f, from)) ?? null;
+}
+
 /** 茂み・草むらの中か */
 export function insideConcealment(map: MapData, p: Vec2): boolean {
   return map.features.some((f) => f.kind === 'concealment' && pointInPolygon(p, f.poly));

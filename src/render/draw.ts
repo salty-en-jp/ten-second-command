@@ -272,15 +272,15 @@ export function drawIncomingWarning(v: View, u: Unit) {
 export function drawTracers(v: View, units: Unit[], tick: number) {
   const { ctx } = v;
   for (const u of units) {
-    if (u.kind !== 'sniper' || !u.lastFire) continue;
+    if ((u.kind !== 'sniper' && u.kind !== 'fireteam') || !u.lastFire) continue;
     const age = tick - u.lastFire.tick;
     if (age < 0 || age > 10) continue;
     const a = toScreen(v, u.pos);
     const b = toScreen(v, u.lastFire.point);
     ctx.save();
     ctx.globalAlpha = 1 - age / 11;
-    ctx.strokeStyle = '#fff6c0';
-    ctx.lineWidth = 2;
+    ctx.strokeStyle = u.kind === 'fireteam' ? '#ffb36b' : '#fff6c0';
+    ctx.lineWidth = u.kind === 'fireteam' ? 3 : 2;
     ctx.beginPath();
     ctx.moveTo(a.x, a.y);
     ctx.lineTo(b.x, b.y);
@@ -360,12 +360,42 @@ export function drawUnit(v: View, u: Unit, opt: UnitDrawOptions = {}) {
     ctx.setLineDash([]);
   }
 
-  // 本体(射撃班は丸、スナイパーはひし形。伏せているときは平たくする)
+  // 本体(射撃班は丸、スナイパーはひし形、迫撃砲は四角、IFV は向きのある長方形と砲塔)
   ctx.fillStyle = color;
   ctx.strokeStyle = '#111';
   ctx.lineWidth = 1.5;
   ctx.beginPath();
-  if (u.kind === 'mortar') {
+  if (u.kind === 'ifv') {
+    const L = Math.max(10, 7 * scale);
+    const W = Math.max(5, 3.6 * scale);
+    ctx.save();
+    ctx.translate(p.x, p.y);
+    ctx.rotate(-u.facing);
+    ctx.rect(-L / 2, -W / 2, L, W);
+    ctx.fill();
+    ctx.stroke();
+    // 車体の前を示す三角
+    ctx.fillStyle = '#111';
+    ctx.beginPath();
+    ctx.moveTo(L / 2, 0);
+    ctx.lineTo(L / 2 - 4, -3);
+    ctx.lineTo(L / 2 - 4, 3);
+    ctx.fill();
+    ctx.restore();
+    // 砲塔と砲身
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, W * 0.45, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.strokeStyle = '#111';
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.moveTo(p.x, p.y);
+    ctx.lineTo(p.x + Math.cos(-u.turret) * L * 0.8, p.y + Math.sin(-u.turret) * L * 0.8);
+    ctx.stroke();
+    ctx.beginPath(); // 下の fill/stroke を空打ちにする
+  } else if (u.kind === 'mortar') {
     const k = r * 0.85;
     ctx.rect(p.x - k, p.y - k, k * 2, k * 2);
   } else if (u.kind === 'sniper') {
@@ -380,17 +410,24 @@ export function drawUnit(v: View, u: Unit, opt: UnitDrawOptions = {}) {
   ctx.fill();
   ctx.stroke();
 
-  // 向き
+  // 向き(IFV は車体と砲塔で示しているので描かない)
+  if (u.kind !== 'ifv') {
   ctx.strokeStyle = '#111';
   ctx.lineWidth = 2;
   ctx.beginPath();
   ctx.moveTo(p.x, p.y);
   ctx.lineTo(p.x + Math.cos(-u.facing) * (r + 5), p.y + Math.sin(-u.facing) * (r + 5));
   ctx.stroke();
+  }
 
   // 人数(残りの兵を点で)
   const men = menAlive(u);
-  for (let i = 0; i < stats.men; i++) {
+  // 軽対戦車火器を持っていれば小さな印
+  if (u.atRounds > 0) {
+    ctx.fillStyle = '#ffb36b';
+    ctx.fillRect(p.x + 10, p.y + r + 3, 5, 5);
+  }
+  for (let i = 0; i < (u.kind === 'ifv' ? 0 : stats.men); i++) {
     ctx.fillStyle = i < men ? '#fff' : 'rgba(255,255,255,0.15)';
     ctx.fillRect(p.x - 9 + i * 5, p.y + r + 4, 4, 3);
   }

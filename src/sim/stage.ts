@@ -1,6 +1,6 @@
 import { DEG } from './config';
 import { rect } from './geometry';
-import { defaultOrders, makeUnit } from './units';
+import { defaultOrders, makeUnit, mount } from './units';
 import type { MapData, Orders, Side, SimState, TerrainFeature, TerrainKind, UnitKind, Vec2 } from './types';
 import { createState } from './step';
 
@@ -30,6 +30,10 @@ export interface StageData {
     y: number;
     facingDeg: number;
     orders?: Partial<Omit<Orders, 'facing'>> & { facingDeg?: number | null };
+    /** 最初からこの IFV に乗っている */
+    mountedIn?: string;
+    /** 軽対戦車火器の弾数(射撃班のオプション装備) */
+    at?: number;
   }>;
   /** 配置可能エリア(後の段階で使う) */
   deployZone?: { x: number; y: number; w: number; h: number };
@@ -49,7 +53,15 @@ export function loadStage(data: StageData): SimState {
       ...rest,
       facing: facingDeg === undefined || facingDeg === null ? null : facingDeg * DEG,
     };
-    return makeUnit(u.kind ?? 'fireteam', u.id, u.side, { x: u.x, y: u.y }, u.facingDeg * DEG, orders);
+    const unit = makeUnit(u.kind ?? 'fireteam', u.id, u.side, { x: u.x, y: u.y }, u.facingDeg * DEG, orders);
+    unit.atRounds = u.at ?? 0;
+    return unit;
   });
+  for (const u of data.units) {
+    if (!u.mountedIn) continue;
+    const p = units.find((x) => x.id === u.id)!;
+    const v = units.find((x) => x.id === u.mountedIn);
+    if (v) mount(p, v);
+  }
   return createState(map, units);
 }

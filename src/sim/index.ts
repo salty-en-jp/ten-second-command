@@ -7,3 +7,4 @@ export * from './step';
 export * from './stage';
 export * from './vision';
 export * from './mortar';
+export * from './ifv';

@@ -1,7 +1,7 @@
 /**
  * 視界(フォグ・オブ・ウォー)。design.md 4.1
  */
-import { TICKS_PER_SECOND, unitStats, VISION } from './config';
+import { IFV, SUPPRESSION, TICKS_PER_SECOND, unitStats, VISION } from './config';
 import { angleDiff, angleTo, dist } from './geometry';
 import { insideConcealment, lineOfFire } from './terrain';
 import type { MapData, Side, SideVision, SimState, Unit } from './types';
@@ -22,8 +22,17 @@ export function detectionRange(map: MapData, viewer: Unit, target: Unit): number
  */
 export function sees(map: MapData, viewer: Unit, target: Unit): boolean {
   if (!viewer.alive || !target.alive) return false;
-  if (dist(viewer.pos, target.pos) > detectionRange(map, viewer, target)) return false;
-  if (angleDiff(viewer.facing, angleTo(viewer.pos, target.pos)) > unitStats(viewer.kind).sightArc / 2) return false;
+  // 乗車中の班は外が見えず、外からも見えない
+  if (viewer.mountedIn !== null || target.mountedIn !== null) return false;
+  const d = dist(viewer.pos, target.pos);
+  if (d > detectionRange(map, viewer, target)) return false;
+  let arc = unitStats(viewer.kind).sightArc;
+  if (viewer.kind === 'ifv' && viewer.suppression >= SUPPRESSION.suppressed) {
+    // ハッチを閉めている:視界が狭く、車体のすぐまわりが見えない(FM 23-25 6-3b)
+    arc = IFV.buttonedArc;
+    if (d < IFV.buttonedBlindRadius) return false;
+  }
+  if (angleDiff(viewer.facing, angleTo(viewer.pos, target.pos)) > arc / 2) return false;
   return lineOfFire(map, viewer.pos, target.pos);
 }
 

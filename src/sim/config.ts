@@ -107,9 +107,86 @@ export const MORTAR = {
   smallArmsFactor: 0.5,
 } as const;
 
+/**
+ * 歩兵戦闘車(IFV)。design.md 6.4(M2 ブラッドレーを抽象化。FM 7-7J)
+ */
+export const IFV = {
+  maxHp: 200,
+  /** 人数で火力が変わらないので 1 人扱い */
+  hpPerMan: 200,
+  men: 1,
+  /** m/秒 (暫定) */
+  speed: 6,
+  reverseSpeed: 2,
+  proneSpeed: 0,
+  /** 旋回(ラジアン/秒) (暫定) */
+  turnRate: 45 * DEG,
+  /** 茂み・軟らかい遮蔽の上を通るときの速度倍率 (暫定) */
+  roughFactor: 0.5,
+  sightRange: 150,
+  sightArc: 120 * DEG,
+  /** ハッチを閉めた状態(制圧値 70 以上)の視界の扇形と、見えない車体まわりの距離 (暫定) */
+  buttonedArc: 60 * DEG,
+  buttonedBlindRadius: 10,
+  /** 機関砲 (暫定) */
+  cannonRange: 300,
+  firepower: 20,
+  suppressionPerSec: 40,
+  /** 乗車・下車(秒) (暫定) */
+  mountSec: 3,
+  /** 下車した班を置く、車体の後ろの距離(m) */
+  dismountDistance: 5,
+  /** 撃破されたとき、乗っていた班が受ける被害と制圧値 */
+  bailOutDamage: 25,
+  bailOutSuppression: 60,
+  /** 撃破された車体の残骸(軟らかい遮蔽)の大きさ */
+  wreckSize: { w: 7, h: 3.5 },
+  /** 迫撃砲は直撃(この距離以内)でないと効かない */
+  mortarDirectHitRadius: 2,
+} as const;
+
+/**
+ * IFV の装甲:攻撃の種類 × 当たった面(正面・側面・背面)の被ダメージ係数。design.md 6.4 (暫定)
+ * 正面・背面は車体の向きから ±45° 以内。
+ */
+export const IFV_ARMOR = {
+  rifle: { front: 0, side: 0, rear: 0 },
+  cannon: { front: 0.3, side: 1.0, rear: 1.2 },
+  at: { front: 0.2, side: 1.0, rear: 1.5 },
+  mortarDirect: { front: 0.5, side: 0.5, rear: 0.5 },
+} as const;
+
+/** 軽対戦車火器(射撃班のオプション装備、使い捨て1発)。design.md 6.1(AT4・M72。FM 23-25) */
+export const AT_WEAPON = {
+  /** 最小射程(信管が作動する距離)と射程 (暫定) */
+  minRange: 10,
+  range: 150,
+  /** 構えてから撃つまで(秒) (暫定) */
+  aimSec: 2,
+  damage: 120,
+  suppression: 50,
+  /** 後方爆風:後ろのこの距離・この扇形にいる味方が制圧値と少しの被害を受ける */
+  backblastRange: 10,
+  backblastArc: 90 * DEG,
+  backblastSuppression: 30,
+  backblastDamage: 5,
+} as const;
+
+/**
+ * 壁の崩壊:IFV の機関砲で撃たれ続けた硬い遮蔽は崩れて軟らかい遮蔽(瓦礫)になる (暫定)
+ * 25mm は外壁の突破と、土・土嚢の陣地に非常に効果的(FM 7-8 6-17、FM 3-21.8 F-85)。
+ */
+export const WALL = {
+  /** IFV の機関砲がこの秒数撃ち続けると崩れる */
+  collapseSec: 12,
+  /** 崩れた瞬間、その遮蔽の内側にいた者が受ける被害と制圧値 */
+  collapseDamage: 15,
+  collapseSuppression: 30,
+} as const;
+
 /** 兵科ごとの基本の値 */
-export function unitStats(kind: 'fireteam' | 'sniper' | 'mortar') {
-  return kind === 'sniper' ? SNIPER : kind === 'mortar' ? MORTAR : FIRETEAM;
+export function unitStats(kind: 'fireteam' | 'sniper' | 'mortar' | 'ifv') {
+  return kind === 'sniper' ? SNIPER : kind === 'mortar' ? MORTAR : kind === 'ifv' ? IFV : FIRETEAM;
 }
 
 /** 接触時の自動行動。design.md 7章 */

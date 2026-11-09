@@ -6,7 +6,7 @@ export interface Vec2 {
 export type Side = 'blue' | 'red';
 
 /** 兵科 */
-export type UnitKind = 'fireteam' | 'sniper' | 'mortar';
+export type UnitKind = 'fireteam' | 'sniper' | 'mortar' | 'ifv';
 
 /** 迫撃砲の射撃命令:フェイズ開始から atSec 秒後に target へ1発 */
 export interface FireMission {
@@ -75,6 +75,12 @@ export interface Orders {
   deploy?: boolean;
   /** 迫撃砲:射撃命令 */
   fireMissions?: FireMission[];
+  /** IFV:経路の終点で止まったら、乗っている班を下車させる */
+  dismount?: boolean;
+  /** 射撃班:この IFV に乗車する(IFV の後ろへ歩いて行って乗る) */
+  mountId?: string | null;
+  /** 射撃班:軽対戦車火器の使用許可(省略時は許可) */
+  atAllowed?: boolean;
 }
 
 /**
@@ -157,6 +163,23 @@ export interface Unit {
   duckTicks: number;
   /** 前のティックに受けた射撃が迫撃砲だけだったか(撃ってきた方向がない) */
   shelledOnly: boolean;
+
+  // ---- IFV と乗車
+  /** 乗っている IFV の id(乗車中は地図に出ず、撃てず、撃たれない) */
+  mountedIn: string | null;
+  /** IFV:乗せている班の id */
+  passengerId: string | null;
+  /** 乗車・下車の進み具合(ティック) */
+  mountTicks: number;
+  /** IFV:砲塔の向き(描画用) */
+  turret: number;
+
+  // ---- 軽対戦車火器
+  atRounds: number;
+  atTargetId: string | null;
+  atAimTicks: number;
+  /** このティックに撃った対戦車火器の目標(描画用) */
+  atShot: string | null;
 }
 
 export interface Shot {
@@ -190,4 +213,6 @@ export interface SimState {
   nextShellId: number;
   /** 最近の着弾(描画用。1秒で消える) */
   impacts: Array<{ pos: Vec2; tick: number; side: Side }>;
+  /** 硬い遮蔽ごとの、IFV の機関砲に撃たれた累計ティック(壁の崩壊) */
+  wallDamage: Record<string, number>;
 }
