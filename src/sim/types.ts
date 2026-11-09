@@ -41,6 +41,11 @@ export interface Orders {
   policy: ContactPolicy;
   /** 離脱方針のときに後退する経路 */
   withdrawRoute: Vec2[];
+  /**
+   * 火力の集中(オプション):優先して撃つ敵の id。null なら一番近い敵を撃つ。
+   * 指定した敵が撃てない(知らない・射程外・射線が通らない)ときは、一番近い敵を撃つ。
+   */
+  focusTargetId: string | null;
 }
 
 /**

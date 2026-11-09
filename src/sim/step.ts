@@ -294,7 +294,8 @@ export function step(state: SimState): SimState {
       const targets = enemies.filter(
         (e) => known[u.side].has(e.id) && dist(u.pos, e.pos) < FIRETEAM.maxRange && lineOfFire(map, u.pos, e.pos),
       );
-      const t = nearest(u.pos, targets);
+      const focus = u.orders.focusTargetId;
+      const t = (focus !== null ? targets.find((e) => e.id === focus) : undefined) ?? nearest(u.pos, targets);
       if (t) {
         u.shot = { targetId: t.id, point: { ...t.pos } };
         u.lastKnownTargetPos = { ...t.pos };

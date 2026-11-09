@@ -2,7 +2,7 @@ import { FIRETEAM } from './config';
 import type { Orders, Side, Unit, Vec2 } from './types';
 
 export function defaultOrders(): Orders {
-  return { route: [], facing: null, fire: 'free', policy: 'hold', withdrawRoute: [] };
+  return { route: [], facing: null, fire: 'free', policy: 'hold', withdrawRoute: [], focusTargetId: null };
 }
 
 /** 射撃班を作る */

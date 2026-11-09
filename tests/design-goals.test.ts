@@ -85,6 +85,7 @@ describe('設計目標4:決定性', () => {
       fire: 'free',
       policy: 'advance',
       withdrawRoute: [],
+      focusTargetId: null,
     },
     b2: {
       route: [],
@@ -92,6 +93,7 @@ describe('設計目標4:決定性', () => {
       fire: 'free',
       policy: 'hold',
       withdrawRoute: [],
+      focusTargetId: 'r1',
     },
   });
 
