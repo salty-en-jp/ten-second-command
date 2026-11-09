@@ -40,7 +40,12 @@ export function renderPanel(el: HTMLElement, p: PanelProps) {
       const ls = p.vision.lastSeen[u.id];
       return `<div class="hint">${label(u)}:見えていない${ls ? `(最終確認 ${((p.tick - ls.tick) / TICKS_PER_SECOND).toFixed(0)}秒前)` : '(まだ見つけていない)'}</div>`;
     }
-    return `<div class="hint">${label(u)}:耐久 ${Math.ceil(u.hp)}/100、制圧値 ${Math.round(u.suppression)}(${stateText(u)})</div>`;
+    const max = u.kind === 'sniper' ? 25 : 100;
+    const sniper =
+      u.kind === 'sniper' && u.alive
+        ? u.cooldownTicks > 0 ? `、装填中 あと${(u.cooldownTicks / TICKS_PER_SECOND).toFixed(1)}秒` : u.aimTargetId ? `、${label({ id: u.aimTargetId })}を狙っている` : ''
+        : '';
+    return `<div class="hint">${label(u)}:耐久 ${Math.ceil(u.hp)}/${max}、制圧値 ${Math.round(u.suppression)}(${stateText(u)})${sniper}</div>`;
   };
 
   let html = '';
@@ -59,13 +64,13 @@ export function renderPanel(el: HTMLElement, p: PanelProps) {
       <div class="group"><h3>地図をクリックして入力</h3>
         <div class="row">
           ${btn('data-tool="route"', '経路', p.tool === 'route')}
-          ${btn('data-tool="facing"', '向き', p.tool === 'facing')}
+          ${btn('data-tool="facing"', u.kind === 'sniper' ? '射界(向き)' : '向き', p.tool === 'facing')}
           ${btn('data-tool="withdraw"', '離脱経路', p.tool === 'withdraw')}
           ${btn('data-tool="focus"', '撃つ敵を指定', p.tool === 'focus')}
         </div>
         <div class="hint">${
           p.tool === 'route' ? '地図をクリックすると経路の点を足します。右クリックか「最後の点を消す」で取り消せます。'
-          : p.tool === 'facing' ? '向かせたい方向をクリックします(経路の終点から)。'
+          : p.tool === 'facing' ? (u.kind === 'sniper' ? '撃つ方向をクリックします。黄色い細い扇形(幅30°)の中に入った敵だけを撃ちます。' : '向かせたい方向をクリックします(経路の終点から)。')
           : p.tool === 'withdraw' ? '「離脱」のときに下がる経路をクリックで足します。右クリックで消します。'
           : '集中して撃つ敵をクリックします。もう一度クリックで解除。'
         }</div>
@@ -76,7 +81,7 @@ export function renderPanel(el: HTMLElement, p: PanelProps) {
           .join('')}</ol>`}
         <div class="row"><button data-act="undoPoint">最後の点を消す</button><button data-act="clearRoute">経路を消す</button>${o.withdrawRoute.length ? '<button data-act="clearWithdraw">離脱経路を消す</button>' : ''}</div>
       </div>
-      <div class="group"><h3>向き</h3>
+      <div class="group"><h3>${u.kind === 'sniper' ? '射界(向き)' : '向き'}</h3>
         <div class="row">${btn('data-facing="auto"', '進む方向を向く', o.facing === null)}${o.facing !== null ? btn('data-tool="facing"', '指定した向き', true) : ''}</div>
       </div>
       <div class="group"><h3>交戦姿勢</h3>

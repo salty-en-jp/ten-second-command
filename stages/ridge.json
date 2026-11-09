@@ -1,0 +1,256 @@
+{
+  "id": "ridge",
+  "name": "尾根の雑木林(スナイパー)",
+  "description": "牧草地をはさんで、敵の射撃班2つと、どこかに隠れた敵の狙撃手が待ち構えている。こちらにも狙撃手が1人。敵の狙撃手は撃つまで見つからない。",
+  "width": 300,
+  "height": 200,
+  "features": [
+    {
+      "id": "woods",
+      "kind": "concealment",
+      "note": "味方側の尾根の雑木林。狙撃手は林の縁から少し奥に入って構える(FM 23-10)",
+      "rect": {
+        "cx": 140,
+        "cy": 25,
+        "w": 220,
+        "h": 30
+      }
+    },
+    {
+      "id": "ditchW",
+      "kind": "hard",
+      "note": "道路わきの側溝(西)",
+      "rect": {
+        "cx": 125,
+        "cy": 80,
+        "w": 40,
+        "h": 1.5
+      }
+    },
+    {
+      "id": "ditchE",
+      "kind": "hard",
+      "note": "道路わきの側溝(東)",
+      "rect": {
+        "cx": 185,
+        "cy": 80,
+        "w": 40,
+        "h": 1.5
+      }
+    },
+    {
+      "id": "tractor",
+      "kind": "soft",
+      "note": "放棄された農業用車両",
+      "rect": {
+        "cx": 140,
+        "cy": 105,
+        "w": 6,
+        "h": 3
+      }
+    },
+    {
+      "id": "cart",
+      "kind": "soft",
+      "note": "放棄された荷車",
+      "rect": {
+        "cx": 55,
+        "cy": 118,
+        "w": 5,
+        "h": 3
+      }
+    },
+    {
+      "id": "hedgeN",
+      "kind": "concealment",
+      "note": "生け垣の列。中にいると見つかりにくい",
+      "rect": {
+        "cx": 115,
+        "cy": 125,
+        "w": 3,
+        "h": 50
+      }
+    },
+    {
+      "id": "hedgeS",
+      "kind": "concealment",
+      "note": "生け垣の列",
+      "rect": {
+        "cx": 175,
+        "cy": 55,
+        "w": 3,
+        "h": 40
+      }
+    },
+    {
+      "id": "church",
+      "kind": "building",
+      "note": "教会。目立つので狙撃手は選ばない場所(FM 23-10 6-8)",
+      "rect": {
+        "cx": 205,
+        "cy": 105,
+        "w": 10,
+        "h": 14
+      }
+    },
+    {
+      "id": "rail",
+      "kind": "hard",
+      "note": "鉄道の盛土。東側は敵から見えない回り道",
+      "rect": {
+        "cx": 255,
+        "cy": 102,
+        "w": 3,
+        "h": 164
+      }
+    },
+    {
+      "id": "wallW",
+      "kind": "hard",
+      "note": "石垣。敵の射撃班の陣地",
+      "rect": {
+        "cx": 150,
+        "cy": 150,
+        "w": 40,
+        "h": 1
+      }
+    },
+    {
+      "id": "wallE",
+      "kind": "hard",
+      "note": "石垣。敵の射撃班の陣地",
+      "rect": {
+        "cx": 215,
+        "cy": 145,
+        "w": 30,
+        "h": 1
+      }
+    },
+    {
+      "id": "hedgeWallW",
+      "kind": "concealment",
+      "note": "石垣に沿った生け垣。中の敵は見つかりにくい",
+      "rect": {
+        "cx": 150,
+        "cy": 152,
+        "w": 40,
+        "h": 4
+      }
+    },
+    {
+      "id": "hedgeWallE",
+      "kind": "concealment",
+      "note": "石垣に沿った生け垣",
+      "rect": {
+        "cx": 215,
+        "cy": 147,
+        "w": 30,
+        "h": 4
+      }
+    },
+    {
+      "id": "farm",
+      "kind": "building",
+      "note": "農家",
+      "rect": {
+        "cx": 130,
+        "cy": 172,
+        "w": 14,
+        "h": 10
+      }
+    },
+    {
+      "id": "barn",
+      "kind": "building",
+      "note": "納屋",
+      "rect": {
+        "cx": 180,
+        "cy": 180,
+        "w": 12,
+        "h": 10
+      }
+    },
+    {
+      "id": "orchard",
+      "kind": "concealment",
+      "note": "果樹園。敵の狙撃手が潜む",
+      "rect": {
+        "cx": 60,
+        "cy": 170,
+        "w": 40,
+        "h": 30
+      }
+    }
+  ],
+  "units": [
+    {
+      "id": "bs",
+      "name": "狙撃手",
+      "kind": "sniper",
+      "side": "blue",
+      "x": 90,
+      "y": 33,
+      "facingDeg": 90
+    },
+    {
+      "id": "b1",
+      "name": "第1班",
+      "side": "blue",
+      "x": 60,
+      "y": 25,
+      "facingDeg": 90
+    },
+    {
+      "id": "b2",
+      "name": "第2班",
+      "side": "blue",
+      "x": 235,
+      "y": 25,
+      "facingDeg": 90
+    },
+    {
+      "id": "r1",
+      "name": "敵A",
+      "side": "red",
+      "x": 150,
+      "y": 151.5,
+      "facingDeg": -90,
+      "orders": {
+        "fire": "free",
+        "policy": "hold"
+      }
+    },
+    {
+      "id": "r2",
+      "name": "敵B",
+      "side": "red",
+      "x": 215,
+      "y": 146.5,
+      "facingDeg": -90,
+      "orders": {
+        "fire": "free",
+        "policy": "hold"
+      }
+    },
+    {
+      "id": "rs",
+      "name": "敵狙撃手",
+      "kind": "sniper",
+      "side": "red",
+      "x": 60,
+      "y": 160,
+      "facingDeg": -70,
+      "orders": {
+        "fire": "free",
+        "policy": "hold",
+        "facingDeg": -70
+      }
+    }
+  ],
+  "deployZone": {
+    "x": 20,
+    "y": 5,
+    "w": 230,
+    "h": 35
+  }
+}

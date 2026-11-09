@@ -1,7 +1,7 @@
 /**
  * 描画:sim の状態を読んで Canvas に描くだけ。状態は書き換えない。
  */
-import { FIRETEAM, SUPPRESSION, type MapData, type Orders, type SimState, type TerrainKind, type Unit, type Vec2 } from '../sim';
+import { SNIPER, SUPPRESSION, unitStats, type MapData, type Orders, type SimState, type TerrainKind, type Unit, type Vec2 } from '../sim';
 import { menAlive } from '../sim/units';
 
 export interface View {
@@ -148,6 +148,31 @@ export interface UnitDrawOptions {
   ghost?: boolean;
   label?: string;
   showSight?: boolean;
+  /** スナイパーの射界を描く */
+  showArc?: boolean;
+  /** 射界の中心(計画中の向き)。省略時は今の向き */
+  arcCenter?: number;
+}
+
+/** スナイパーの1発(撃ってから 0.5 秒だけ光る線) */
+export function drawTracers(v: View, units: Unit[], tick: number) {
+  const { ctx } = v;
+  for (const u of units) {
+    if (u.kind !== 'sniper' || !u.lastFire) continue;
+    const age = tick - u.lastFire.tick;
+    if (age < 0 || age > 10) continue;
+    const a = toScreen(v, u.pos);
+    const b = toScreen(v, u.lastFire.point);
+    ctx.save();
+    ctx.globalAlpha = 1 - age / 11;
+    ctx.strokeStyle = '#fff6c0';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(a.x, a.y);
+    ctx.lineTo(b.x, b.y);
+    ctx.stroke();
+    ctx.restore();
+  }
 }
 
 export function drawUnit(v: View, u: Unit, opt: UnitDrawOptions = {}) {
@@ -172,19 +197,34 @@ export function drawUnit(v: View, u: Unit, opt: UnitDrawOptions = {}) {
   }
 
   // 視界の扇形(画面では y が下向きなので角度の符号が逆になる)
+  const stats = unitStats(u.kind);
   if (opt.showSight) {
-    const half = FIRETEAM.sightArc / 2;
+    const half = stats.sightArc / 2;
     ctx.fillStyle = u.side === 'blue' ? 'rgba(90,169,255,0.05)' : 'rgba(255,107,90,0.05)';
     ctx.strokeStyle = u.side === 'blue' ? 'rgba(90,169,255,0.35)' : 'rgba(255,107,90,0.35)';
     ctx.lineWidth = 1;
     ctx.setLineDash([4, 6]);
     ctx.beginPath();
     ctx.moveTo(p.x, p.y);
-    ctx.arc(p.x, p.y, FIRETEAM.sightRange * scale, -u.facing - half, -u.facing + half);
+    ctx.arc(p.x, p.y, stats.sightRange * scale, -u.facing - half, -u.facing + half);
     ctx.closePath();
     ctx.fill();
     ctx.stroke();
     ctx.setLineDash([]);
+  }
+  // スナイパーの射界(この細い扇形の中の敵だけを撃つ)
+  if (u.kind === 'sniper' && opt.showArc) {
+    const c = opt.arcCenter ?? u.facing;
+    const half = SNIPER.arcWidth / 2;
+    ctx.fillStyle = u.side === 'blue' ? 'rgba(255,224,122,0.14)' : 'rgba(255,107,90,0.16)';
+    ctx.strokeStyle = u.side === 'blue' ? 'rgba(255,224,122,0.6)' : 'rgba(255,107,90,0.6)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(p.x, p.y);
+    ctx.arc(p.x, p.y, SNIPER.range * scale, -c - half, -c + half);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
   }
 
   // 制圧値のリング
@@ -206,12 +246,19 @@ export function drawUnit(v: View, u: Unit, opt: UnitDrawOptions = {}) {
     ctx.setLineDash([]);
   }
 
-  // 本体(伏せているときは平たい楕円)
+  // 本体(射撃班は丸、スナイパーはひし形。伏せているときは平たくする)
   ctx.fillStyle = color;
   ctx.strokeStyle = '#111';
   ctx.lineWidth = 1.5;
   ctx.beginPath();
-  if (u.prone) ctx.ellipse(p.x, p.y, r * 1.2, r * 0.6, -u.facing + Math.PI / 2, 0, Math.PI * 2);
+  if (u.kind === 'sniper') {
+    const k = r * 0.9;
+    ctx.moveTo(p.x, p.y - k);
+    ctx.lineTo(p.x + k, p.y);
+    ctx.lineTo(p.x, p.y + k);
+    ctx.lineTo(p.x - k, p.y);
+    ctx.closePath();
+  } else if (u.prone) ctx.ellipse(p.x, p.y, r * 1.2, r * 0.6, -u.facing + Math.PI / 2, 0, Math.PI * 2);
   else ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
   ctx.fill();
   ctx.stroke();
@@ -226,7 +273,7 @@ export function drawUnit(v: View, u: Unit, opt: UnitDrawOptions = {}) {
 
   // 人数(残りの兵を点で)
   const men = menAlive(u);
-  for (let i = 0; i < FIRETEAM.men; i++) {
+  for (let i = 0; i < stats.men; i++) {
     ctx.fillStyle = i < men ? '#fff' : 'rgba(255,255,255,0.15)';
     ctx.fillRect(p.x - 9 + i * 5, p.y + r + 4, 4, 3);
   }

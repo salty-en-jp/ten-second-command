@@ -33,6 +33,41 @@ export const FIRETEAM = {
   maxRange: 200,
 } as const;
 
+/**
+ * スナイパー。design.md 6.2
+ * 射撃班のような毎ティックの火力ではなく、1発ずつ撃つ。
+ */
+export const SNIPER = {
+  maxHp: 25,
+  hpPerMan: 25,
+  men: 1,
+  /** m/秒 (暫定) */
+  speed: 1.2,
+  proneSpeed: 0.8,
+  /** m (暫定) */
+  sightRange: 250,
+  /** 見張る範囲は射撃班と同じ扇形(観測手が双眼鏡で広く見る。FM 23-10 4-14) */
+  sightArc: 120 * DEG,
+  /** 射程(暫定)。この距離まで減衰なし */
+  range: 250,
+  /** 射界の幅(暫定)。「向き」で指定した方向を中心に、この幅の中の敵だけを撃つ */
+  arcWidth: 30 * DEG,
+  /** 射界に入ってから撃つまで(秒)。止まっている目標 (暫定) */
+  reactionStillSec: 0.4,
+  /** 移動中の目標 (暫定) */
+  reactionMovingSec: 1.2,
+  /** 1発撃ってから次を撃てるまで(秒) (暫定) */
+  cooldownSec: 8,
+  /** 命中時の効果 */
+  damage: 25,
+  suppression: 50,
+} as const;
+
+/** 兵科ごとの基本の値 */
+export function unitStats(kind: 'fireteam' | 'sniper') {
+  return kind === 'sniper' ? SNIPER : FIRETEAM;
+}
+
 /** 接触時の自動行動。design.md 7章 */
 export const CONTACT = {
   /** 反応遅延(秒) */

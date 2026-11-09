@@ -6,7 +6,9 @@ import {
   DAMAGE,
   FIRETEAM,
   PHASE_TICKS,
+  SNIPER,
   SUPPRESSION,
+  unitStats,
   TICKS_PER_SECOND,
 } from './config';
 import { angleDiff, angleTo, dist, offsetPerimeterPoints } from './geometry';
@@ -27,6 +29,7 @@ function cloneUnit(u: Unit): Unit {
     threatPos: u.threatPos && { ...u.threatPos },
     lastShotFrom: u.lastShotFrom && { ...u.lastShotFrom },
     lastKnownTargetPos: u.lastKnownTargetPos && { ...u.lastKnownTargetPos },
+    lastFire: u.lastFire && { tick: u.lastFire.tick, point: { ...u.lastFire.point } },
     shot: u.shot && { ...u.shot, point: { ...u.shot.point } },
     orders: u.orders,
   };
@@ -117,7 +120,7 @@ function followRoute(map: MapData, u: Unit): void {
   const wp = route[u.routeIndex];
   if (!wp) return;
   if (u.waitTicksLeft < 0) {
-    if (moveToward(map, u, wp.pos, FIRETEAM.speed)) {
+    if (moveToward(map, u, wp.pos, unitStats(u.kind).speed)) {
       u.waitTicksLeft = Math.round(wp.waitSec * TICKS_PER_SECOND);
     }
   }
@@ -137,13 +140,13 @@ function followWithdraw(map: MapData, u: Unit): void {
     u.activity = 'engaged';
     return;
   }
-  if (moveToward(map, u, p, FIRETEAM.speed * CONTACT.withdrawSpeedFactor)) u.withdrawIndex++;
+  if (moveToward(map, u, p, unitStats(u.kind).speed * CONTACT.withdrawSpeedFactor)) u.withdrawIndex++;
   if (u.withdrawIndex >= u.orders.withdrawRoute.length) u.activity = 'engaged';
 }
 
 /** 3秒で届く範囲で、脅威の方向に正面が向いた遮蔽の位置を探す。design.md 7章 */
-export function findCover(map: MapData, from: Vec2, threat: Vec2): Vec2 | null {
-  const reach = FIRETEAM.speed * CONTACT.coverSearchSec;
+export function findCover(map: MapData, from: Vec2, threat: Vec2, speed: number = FIRETEAM.speed): Vec2 | null {
+  const reach = speed * CONTACT.coverSearchSec;
   let best: Vec2 | null = null;
   let bestD = Infinity;
   for (const f of map.features) {
@@ -158,6 +161,67 @@ export function findCover(map: MapData, from: Vec2, threat: Vec2): Vec2 | null {
     }
   }
   return best;
+}
+
+// ---------------------------------------------------------------- スナイパー
+
+/**
+ * スナイパーの射撃判断。design.md 6.2
+ * 射界(向きを中心に SNIPER.arcWidth)に入った敵を、反応時間ののちに1発撃つ。撃ったら装填を待つ。
+ * 目標の優先順位:火力の集中で指定した敵 > 自分を撃ってきた敵 > 敵のスナイパー > 一番近い敵
+ */
+function sniperDecide(
+  u: Unit,
+  pu: Unit,
+  enemies: Unit[],
+  known: Set<string>,
+  ready: boolean,
+  map: MapData,
+  prevById: Map<string, Unit>,
+  nextTick: number,
+): void {
+  if (u.cooldownTicks > 0) u.cooldownTicks--;
+  if (u.orders.focusTargetId !== null && !prevById.get(u.orders.focusTargetId)?.alive) {
+    u.orders = { ...u.orders, focusTargetId: null };
+  }
+  if (!ready || isSuppressed(u)) {
+    u.aimTargetId = null;
+    u.aimTicks = 0;
+    return;
+  }
+  const center = u.orders.facing ?? pu.facing;
+  const cands = enemies.filter(
+    (e) =>
+      known.has(e.id) &&
+      dist(u.pos, e.pos) <= SNIPER.range &&
+      angleDiff(center, angleTo(u.pos, e.pos)) <= SNIPER.arcWidth / 2 &&
+      lineOfFire(map, u.pos, e.pos),
+  );
+  const t =
+    cands.find((e) => e.id === u.orders.focusTargetId) ??
+    cands.find((e) => e.id === pu.lastShooterId) ??
+    nearest(u.pos, cands.filter((e) => e.kind === 'sniper')) ??
+    nearest(u.pos, cands);
+  if (!t) {
+    u.aimTargetId = null;
+    u.aimTicks = 0;
+    return;
+  }
+  if (u.aimTargetId === t.id) u.aimTicks++;
+  else {
+    u.aimTargetId = t.id;
+    u.aimTicks = 1;
+  }
+  u.threatPos = { ...t.pos };
+  u.lastKnownTargetPos = { ...t.pos };
+  u.lastKnownTargetId = t.id;
+  const need = Math.round((t.moved ? SNIPER.reactionMovingSec : SNIPER.reactionStillSec) * TICKS_PER_SECOND);
+  if (u.aimTicks >= need && u.cooldownTicks === 0) {
+    u.shot = { targetId: t.id, point: { ...t.pos }, blind: false };
+    u.lastFire = { tick: nextTick, point: { ...t.pos } };
+    u.cooldownTicks = Math.round(SNIPER.cooldownSec * TICKS_PER_SECOND);
+    u.aimTicks = 0;
+  }
 }
 
 // ---------------------------------------------------------------- 1ティック
@@ -253,7 +317,7 @@ export function step(state: SimState): SimState {
           if (effectiveCover(map, u.pos, threat)) {
             u.activity = 'engaged';
           } else {
-            u.coverTarget = findCover(map, u.pos, threat);
+            u.coverTarget = findCover(map, u.pos, threat, unitStats(u.kind).speed);
             if (u.coverTarget) u.activity = 'seekingCover';
             else {
               u.prone = true;
@@ -267,7 +331,7 @@ export function step(state: SimState): SimState {
           u.prone = true;
           u.coverTarget = null;
           u.activity = 'engaged';
-        } else if (u.coverTarget && moveToward(map, u, u.coverTarget, FIRETEAM.speed)) {
+        } else if (u.coverTarget && moveToward(map, u, u.coverTarget, unitStats(u.kind).speed)) {
           u.coverTarget = null;
           u.activity = 'engaged';
         }
@@ -293,7 +357,9 @@ export function step(state: SimState): SimState {
 
     // 射撃目標:陣営が知っている敵のうち、射程内で射線の通る敵
     const inContact = u.activity !== 'route' && u.activity !== 'reacting';
-    if (canFire && inContact) {
+    if (u.kind === 'sniper') {
+      sniperDecide(u, pu, enemies, known[u.side], canFire && inContact, map, prevById, s.tick + 1);
+    } else if (canFire && inContact) {
       const pinned = isPinned(u);
       const targets = enemies.filter(
         (e) =>
@@ -330,8 +396,9 @@ export function step(state: SimState): SimState {
       }
     }
 
-    // 向き
-    if (u.activity !== 'route' && u.threatPos) u.facing = angleTo(u.pos, u.threatPos);
+    // 向き(スナイパーは「向き」を指定されていれば射界を見張り続ける)
+    if (u.kind === 'sniper' && u.orders.facing !== null) u.facing = u.orders.facing;
+    else if (u.activity !== 'route' && u.threatPos) u.facing = angleTo(u.pos, u.threatPos);
     else if (u.orders.facing !== null) u.facing = u.orders.facing;
     else if (u.moved) u.facing = angleTo(pu.pos, u.pos);
   }
@@ -339,17 +406,24 @@ export function step(state: SimState): SimState {
   // ---- 2. 射撃の効果を集計(射撃時の位置は前のティック)
   const dmg = new Map<string, number>();
   const supp = new Map<string, number>();
-  const shotFrom = new Map<string, Vec2>();
+  const shotFrom = new Map<string, { pos: Vec2; id: string }>();
   const stopsRecovery = new Set<string>();
+  let shooterId = '';
   const hit = (id: string, d: number, sp: number, from: Vec2, strong: boolean) => {
     dmg.set(id, (dmg.get(id) ?? 0) + d);
     supp.set(id, (supp.get(id) ?? 0) + sp);
-    if (!shotFrom.has(id)) shotFrom.set(id, from);
+    if (!shotFrom.has(id)) shotFrom.set(id, { pos: from, id: shooterId });
     if (strong) stopsRecovery.add(id);
   };
   for (const shooter of s.units) {
     if (!shooter.shot) continue;
+    shooterId = shooter.id;
     const from = prevById.get(shooter.id)!.pos;
+    if (shooter.kind === 'sniper') {
+      // 1発の命中:耐久 −25、制圧値 +50(遮蔽の係数はかけない。design.md 6.2)
+      if (shooter.shot.targetId !== null) hit(shooter.shot.targetId, SNIPER.damage, SNIPER.suppression, from, true);
+      continue;
+    }
     const power = (menAlive(shooter) / FIRETEAM.men) * shooterFactor(shooter);
     const strong = shooter.suppression < SUPPRESSION.stopsRecoveryBelow;
     const blindDmg = shooter.shot.blind ? BLIND_FIRE.damage : 1;
@@ -391,7 +465,9 @@ export function step(state: SimState): SimState {
     if (sp !== undefined) {
       u.hp -= dmg.get(u.id) ?? 0;
       u.suppression += sp;
-      u.lastShotFrom = { ...shotFrom.get(u.id)! };
+      const sf = shotFrom.get(u.id)!;
+      u.lastShotFrom = { ...sf.pos };
+      u.lastShooterId = sf.id;
     }
     if (stopsRecovery.has(u.id)) {
       u.ticksSinceShot = 0;
