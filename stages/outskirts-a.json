@@ -2,6 +2,7 @@
   "id": "outskirts-a",
   "name": "小村の外れ A(待ち伏せ型)",
   "description": "沈み道と農家のある小村の外れ。敵の射撃班3つ。こちらは射撃班2つと迫撃砲。",
+  "par": 18,
   "width": 300,
   "height": 200,
   "features": [

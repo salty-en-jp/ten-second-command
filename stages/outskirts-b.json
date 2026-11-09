@@ -2,6 +2,7 @@
   "id": "outskirts-b",
   "name": "小村の外れ B(突撃型)",
   "description": "沈み道と農家のある小村の外れ。北から敵の射撃班3つが攻めてくる。こちらは林の縁に掘った射撃壕で守る。",
+  "par": 9,
   "width": 300,
   "height": 200,
   "features": [

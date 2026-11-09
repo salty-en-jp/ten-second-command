@@ -1,5 +1,6 @@
 /** ミッション選択画面 */
 import type { StageData } from '../sim';
+import { loadBest, starText } from './storage';
 
 export function renderMissionSelect(main: HTMLElement, status: HTMLElement, stages: StageData[]) {
   status.textContent = 'ミッションを選んでください';
@@ -17,6 +18,7 @@ export function renderMissionSelect(main: HTMLElement, status: HTMLElement, stag
           <h2>${s.name}</h2>
           ${s.aiLabel ? `<div class="ai">敵の性格:<b>${s.aiLabel.name}</b> — ${s.aiLabel.description}</div>` : ''}
           <p>${s.description ?? ''}</p>
+          <div class="best">${starText(loadBest(s.id))}<span class="hint"> 目標 ${s.par ?? '-'} フェイズ</span></div>
           <div class="hint">地図 ${s.width}×${s.height} m ／ 味方:${fmt(desc(count(s, 'blue')))} ／ 敵:${fmt(desc(count(s, 'red')))}</div>
         </a>`,
         )

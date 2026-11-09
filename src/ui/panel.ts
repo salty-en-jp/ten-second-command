@@ -1,10 +1,13 @@
 /** 右側のパネル:選んだ班への命令を入力する */
 import { MORTAR, SUPPRESSION, TICKS_PER_SECOND, type Orders, type SideVision, type Unit } from '../sim';
 import { label } from './orders';
+import { starText } from './storage';
+import type { Evaluation } from '../sim';
 
 export type Tool = 'route' | 'withdraw' | 'facing' | 'focus' | 'mortar';
 
 interface PanelProps {
+  result: { ev: Evaluation; best: number } | null;
   vision: SideVision;
   tick: number;
   revealAll: boolean;
@@ -63,7 +66,17 @@ export function renderPanel(el: HTMLElement, p: PanelProps) {
 
   let html = '';
   if (p.mode === 'over') {
-    html += `<div class="overlay">${p.outcomeText}<div class="row" style="justify-content:center"><button class="primary" data-act="retry">同じ配置からやり直す</button></div></div>`;
+    const r = p.result;
+    const evalHtml =
+      r && r.ev.stars > 0
+        ? `<div class="stars">${starText(r.ev.stars)}</div>
+           <div class="hint">かかったフェイズ:${r.ev.phases}(目標 ${r.ev.par})${r.ev.phases <= r.ev.par ? ' ✓' : ''}<br>
+           失った耐久:${Math.round(r.ev.lossRatio * 100)}%(★3 は 30% 以下)<br>
+           全滅した班:${r.ev.destroyed.length ? r.ev.destroyed.map((id) => label({ id })).join('、') : 'なし'}<br>
+           このミッションの最高:${starText(r.best)}</div>
+           <div class="hint">★1 勝利 / ★2 目標フェイズ以内 / ★3 さらに全滅した班なし・失った耐久30%以下</div>`
+        : '';
+    html += `<div class="overlay">${p.outcomeText}${evalHtml}<div class="row" style="justify-content:center"><button class="primary" data-act="retry">同じ配置からやり直す</button><a href="#"><button>ミッション選択へ</button></a></div></div>`;
   }
   html += `<div class="group"><h3>部隊の状態</h3>${[...blue, ...red].map(status).join('')}</div>`;
 

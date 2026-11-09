@@ -11,6 +11,8 @@ export interface StageData {
   name: string;
   /** ミッション選択画面に出す説明 */
   description?: string;
+  /** 目標フェイズ数(ステージ評価の ★2・★3 の条件) */
+  par?: number;
   width: number;
   height: number;
   features: Array<{
