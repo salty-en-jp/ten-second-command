@@ -1,0 +1,245 @@
+{
+  "id": "outskirts-a",
+  "name": "小村の外れ A(待ち伏せ型)",
+  "description": "沈み道と農家のある小村の外れ。敵の射撃班3つ。こちらは射撃班2つと迫撃砲。",
+  "width": 300,
+  "height": 200,
+  "features": [
+    {
+      "id": "woodsS",
+      "kind": "concealment",
+      "note": "味方側の林",
+      "rect": {
+        "cx": 150,
+        "cy": 18,
+        "w": 300,
+        "h": 26
+      }
+    },
+    {
+      "id": "hedgeS",
+      "kind": "concealment",
+      "note": "沈み道の南の生け垣",
+      "rect": {
+        "cx": 150,
+        "cy": 90,
+        "w": 220,
+        "h": 3
+      }
+    },
+    {
+      "id": "hedgeN",
+      "kind": "concealment",
+      "note": "沈み道の北の生け垣。待ち伏せに使われる",
+      "rect": {
+        "cx": 150,
+        "cy": 103,
+        "w": 220,
+        "h": 3
+      }
+    },
+    {
+      "id": "wreckW",
+      "kind": "soft",
+      "note": "放棄された荷車",
+      "rect": {
+        "cx": 90,
+        "cy": 60,
+        "w": 6,
+        "h": 3
+      }
+    },
+    {
+      "id": "wreckE",
+      "kind": "soft",
+      "note": "放棄されたトラクター",
+      "rect": {
+        "cx": 205,
+        "cy": 65,
+        "w": 6,
+        "h": 3
+      }
+    },
+    {
+      "id": "wallS",
+      "kind": "hard",
+      "note": "農家を囲む L 字の石垣(南)",
+      "rect": {
+        "cx": 150,
+        "cy": 150,
+        "w": 60,
+        "h": 1
+      }
+    },
+    {
+      "id": "wallW",
+      "kind": "hard",
+      "note": "農家を囲む石垣(西)",
+      "rect": {
+        "cx": 119.5,
+        "cy": 160,
+        "w": 1,
+        "h": 20
+      }
+    },
+    {
+      "id": "wallE",
+      "kind": "hard",
+      "note": "農家を囲む石垣(東)",
+      "rect": {
+        "cx": 180.5,
+        "cy": 160,
+        "w": 1,
+        "h": 20
+      }
+    },
+    {
+      "id": "farm",
+      "kind": "building",
+      "note": "農家",
+      "rect": {
+        "cx": 150,
+        "cy": 172,
+        "w": 22,
+        "h": 12
+      }
+    },
+    {
+      "id": "orchard",
+      "kind": "concealment",
+      "note": "北西の果樹園",
+      "rect": {
+        "cx": 50,
+        "cy": 165,
+        "w": 40,
+        "h": 30
+      }
+    },
+    {
+      "id": "rail",
+      "kind": "hard",
+      "note": "鉄道の盛土。東側は回り込みの道",
+      "rect": {
+        "cx": 270,
+        "cy": 105,
+        "w": 3,
+        "h": 150
+      }
+    }
+  ],
+  "deployZone": {
+    "x": 20,
+    "y": 5,
+    "w": 260,
+    "h": 26
+  },
+  "units": [
+    {
+      "id": "b1",
+      "name": "第1班",
+      "side": "blue",
+      "x": 110,
+      "y": 18,
+      "facingDeg": 90
+    },
+    {
+      "id": "b2",
+      "name": "第2班",
+      "side": "blue",
+      "x": 190,
+      "y": 18,
+      "facingDeg": 90
+    },
+    {
+      "id": "m1",
+      "name": "迫撃砲班",
+      "kind": "mortar",
+      "side": "blue",
+      "x": 150,
+      "y": 14,
+      "facingDeg": 90
+    },
+    {
+      "id": "r1",
+      "name": "敵A",
+      "side": "red",
+      "x": 95,
+      "y": 103,
+      "facingDeg": -90
+    },
+    {
+      "id": "r2",
+      "name": "敵B",
+      "side": "red",
+      "x": 205,
+      "y": 103,
+      "facingDeg": -90
+    },
+    {
+      "id": "r3",
+      "name": "敵C",
+      "side": "red",
+      "x": 150,
+      "y": 151.5,
+      "facingDeg": -90
+    }
+  ],
+  "ai": {
+    "personality": "ambush",
+    "side": "red",
+    "openFireRange": 60,
+    "positions": {
+      "r1": [
+        {
+          "x": 95,
+          "y": 103,
+          "facingDeg": -90
+        },
+        {
+          "x": 130,
+          "y": 151.5,
+          "facingDeg": -90
+        },
+        {
+          "x": 140,
+          "y": 184,
+          "facingDeg": -90
+        }
+      ],
+      "r2": [
+        {
+          "x": 205,
+          "y": 103,
+          "facingDeg": -90
+        },
+        {
+          "x": 170,
+          "y": 151.5,
+          "facingDeg": -90
+        },
+        {
+          "x": 160,
+          "y": 184,
+          "facingDeg": -90
+        }
+      ],
+      "r3": [
+        {
+          "x": 150,
+          "y": 151.5,
+          "facingDeg": -90
+        },
+        {
+          "x": 150,
+          "y": 184,
+          "facingDeg": -90
+        }
+      ]
+    }
+  },
+  "aiLabel": {
+    "name": "待ち伏せ型",
+    "description": "近づくまで撃ってこない。撃たれたときには、もう下がる準備ができている。",
+    "hint": "静かな場所ほど怪しい"
+  }
+}

@@ -56,6 +56,8 @@ export function cloneState(s: SimState): SimState {
     nextShellId: s.nextShellId,
     impacts: s.impacts,
     wallDamage: { ...s.wallDamage },
+    defenseLine: s.defenseLine,
+    ai: s.ai,
   };
 }
 
@@ -371,7 +373,11 @@ export function step(state: SimState): SimState {
     const wasShot = pu.firedOn;
     const discovered = enemies.some((e) => sees(map, e, pu));
 
-    if (u.orders.fire === 'hold' && !u.holdFireLifted && (wasShot || discovered)) u.holdFireLifted = true;
+    // 射撃開始線:陣営が知っている敵がこの距離に入ったら撃ち始める(待ち伏せ)
+    const inKillZone =
+      u.orders.openFireRange != null &&
+      enemies.some((e) => known[u.side].has(e.id) && dist(u.pos, e.pos) <= u.orders.openFireRange!);
+    if (u.orders.fire === 'hold' && !u.holdFireLifted && (wasShot || discovered || inKillZone)) u.holdFireLifted = true;
     const canFire = u.orders.fire === 'free' || u.holdFireLifted;
 
     if (u.kind === 'ifv') {
@@ -478,7 +484,8 @@ export function step(state: SimState): SimState {
       const targets = enemies.filter(
         (e) =>
           known[u.side].has(e.id) &&
-          dist(u.pos, e.pos) < FIRETEAM.maxRange &&
+          // 迫撃砲班の小銃は自衛用:有効射程(100 m)の中の敵だけを撃つ
+          dist(u.pos, e.pos) < (u.kind === 'mortar' ? FIRETEAM.effectiveRange : FIRETEAM.maxRange) &&
           lineOfFire(map, u.pos, e.pos) &&
           // 釘付けなら、効いている遮蔽の内側からの盲射だけ
           (!pinned || effectiveCover(map, u.pos, e.pos) !== null),
@@ -714,6 +721,12 @@ export function step(state: SimState): SimState {
     const blue = s.units.some((u) => u.alive && u.side === 'blue');
     const red = s.units.some((u) => u.alive && u.side === 'red');
     s.outcome = blue && red ? 'ongoing' : blue ? 'blueWin' : red ? 'redWin' : 'draw';
+    // 防衛線の突破:攻める側のユニットが線を越えたら、守る側の負け
+    const line = s.defenseLine;
+    if (line && s.outcome === 'ongoing') {
+      const crossed = s.units.some((u) => u.alive && u.side !== line.defender && u.pos.y <= line.y);
+      if (crossed) s.outcome = line.defender === 'blue' ? 'redWin' : 'blueWin';
+    }
   }
   return s;
 }

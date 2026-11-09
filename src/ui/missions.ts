@@ -13,8 +13,9 @@ export function renderMissionSelect(main: HTMLElement, status: HTMLElement, stag
         .map(
           (s, i) => `
         <a class="mission" href="#${s.id}">
-          <div class="num">ミッション ${i + 1}</div>
+          <div class="num">ミッション ${i < 4 ? i + 1 : `5-${'ABC'[i - 4]}`}</div>
           <h2>${s.name}</h2>
+          ${s.aiLabel ? `<div class="ai">敵の性格:<b>${s.aiLabel.name}</b> — ${s.aiLabel.description}</div>` : ''}
           <p>${s.description ?? ''}</p>
           <div class="hint">地図 ${s.width}×${s.height} m ／ 味方:${fmt(desc(count(s, 'blue')))} ／ 敵:${fmt(desc(count(s, 'red')))}</div>
         </a>`,

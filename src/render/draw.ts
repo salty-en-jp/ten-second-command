@@ -81,6 +81,25 @@ export function drawTerrain(v: View) {
   ctx.fillText('20 m', 10, map.height * scale - 14);
 }
 
+/** 防衛線(ここを敵に越えられたら負け) */
+export function drawDefenseLine(v: View, y: number) {
+  const { ctx, map, scale } = v;
+  const p = toScreen(v, { x: 0, y });
+  ctx.save();
+  ctx.strokeStyle = 'rgba(255,90,70,0.8)';
+  ctx.lineWidth = 2;
+  ctx.setLineDash([8, 5]);
+  ctx.beginPath();
+  ctx.moveTo(0, p.y);
+  ctx.lineTo(map.width * scale, p.y);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle = 'rgba(255,120,100,0.95)';
+  ctx.font = 'bold 11px system-ui';
+  ctx.fillText('防衛線(敵に越えられたら負け)', 8, p.y - 4);
+  ctx.restore();
+}
+
 export function drawDeployZone(v: View, z: { x: number; y: number; w: number; h: number } | undefined) {
   if (!z) return;
   const a = toScreen(v, { x: z.x, y: z.y + z.h });
