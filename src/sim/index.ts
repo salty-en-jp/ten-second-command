@@ -9,3 +9,4 @@ export * from './vision';
 export * from './mortar';
 export * from './ifv';
 export * from './ai';
+export * from './evaluate';

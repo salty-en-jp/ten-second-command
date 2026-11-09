@@ -2,6 +2,7 @@
   "id": "outskirts-c",
   "name": "小村の外れ C(防御型)",
   "description": "沈み道と農家のある小村の外れ。L 字の石垣に囲まれた農家に敵の射撃班3つ。",
+  "par": 15,
   "width": 300,
   "height": 200,
   "features": [

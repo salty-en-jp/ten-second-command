@@ -6,6 +6,8 @@ import {
   issueOrders,
   loadStage,
   planAi,
+  evaluate,
+  type Evaluation,
   PHASE_SECONDS,
   PHASE_TICKS,
   runPhase,
@@ -40,6 +42,7 @@ import {
   type View,
 } from '../render/draw';
 import { draftsFor, label, setLabels } from './orders';
+import { saveBest } from './storage';
 import { renderPanel, type Tool } from './panel';
 
 type Mode = 'planning' | 'executing' | 'over';
@@ -55,6 +58,8 @@ export class App {
   private phase = 1;
   private selected: string | null = 'b1';
   private tool: Tool = 'route';
+  /** 勝敗がついたときの評価 */
+  private result: { ev: Evaluation; best: number } | null = null;
   private showSight: 'selected' | 'all' | 'none' = 'selected';
   /** 確認用:敵を全部見せる */
   private revealAll = false;
@@ -195,6 +200,8 @@ export class App {
     this.frames = [];
     if (this.current.outcome !== 'ongoing') {
       this.mode = 'over';
+      const ev = evaluate(this.initial, this.current, this.phase, this.stage.par ?? 99);
+      this.result = { ev, best: saveBest(this.stage.id, ev.stars) };
     } else {
       this.mode = 'planning';
       this.phase++;
@@ -208,6 +215,7 @@ export class App {
 
   retry() {
     this.current = planAi(this.initial, this.stage);
+    this.result = null;
     this.drafts = draftsFor(this.current);
     this.frames = [];
     this.mode = 'planning';
@@ -429,6 +437,7 @@ export class App {
       : this.current.outcome === 'draw' ? '引き分け:双方が全滅しました'
       : '';
     renderPanel(this.panel, {
+      result: this.result,
       vision: frame.vision.blue,
       tick: frame.tick,
       revealAll: this.revealAll,
