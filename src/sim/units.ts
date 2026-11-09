@@ -33,6 +33,7 @@ export function makeFireteam(id: string, side: Side, pos: Vec2, facing: number, 
     lastKnownTargetId: null,
     moved: false,
     shot: null,
+    ticksSinceFired: Number.MAX_SAFE_INTEGER,
   };
 }
 

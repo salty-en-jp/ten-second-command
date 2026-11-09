@@ -1,10 +1,13 @@
 /** 右側のパネル:選んだ班への命令を入力する */
-import { SUPPRESSION, type Orders, type Unit } from '../sim';
+import { SUPPRESSION, TICKS_PER_SECOND, type Orders, type SideVision, type Unit } from '../sim';
 import { label } from './orders';
 
 export type Tool = 'route' | 'withdraw' | 'facing' | 'focus';
 
 interface PanelProps {
+  vision: SideVision;
+  tick: number;
+  revealAll: boolean;
   mode: 'planning' | 'executing' | 'over';
   outcomeText: string;
   units: Unit[];
@@ -32,7 +35,13 @@ const btn = (attr: string, text: string, on: boolean) => `<button ${attr} class=
 export function renderPanel(el: HTMLElement, p: PanelProps) {
   const blue = p.units.filter((u) => u.side === 'blue');
   const red = p.units.filter((u) => u.side === 'red');
-  const status = (u: Unit) => `<div class="hint">${label(u)}:耐久 ${Math.ceil(u.hp)}/100、制圧値 ${Math.round(u.suppression)}(${stateText(u)})</div>`;
+  const status = (u: Unit) => {
+    if (u.side === 'red' && u.alive && !p.revealAll && !p.vision.visible.includes(u.id)) {
+      const ls = p.vision.lastSeen[u.id];
+      return `<div class="hint">${label(u)}:見えていない${ls ? `(最終確認 ${((p.tick - ls.tick) / TICKS_PER_SECOND).toFixed(0)}秒前)` : '(まだ見つけていない)'}</div>`;
+    }
+    return `<div class="hint">${label(u)}:耐久 ${Math.ceil(u.hp)}/100、制圧値 ${Math.round(u.suppression)}(${stateText(u)})</div>`;
+  };
 
   let html = '';
   if (p.mode === 'over') {
@@ -84,7 +93,7 @@ export function renderPanel(el: HTMLElement, p: PanelProps) {
       </div>
       <div class="group"><h3>火力の集中</h3>
         <div class="row">${btn('data-focus=""', '指定しない(近い敵)', o.focusTargetId === null)}${red
-          .filter((r) => r.alive)
+          .filter((r) => r.alive && (p.revealAll || p.vision.visible.includes(r.id) || p.vision.lastSeen[r.id]))
           .map((r) => btn(`data-focus="${r.id}"`, label(r), o.focusTargetId === r.id))
           .join('')}</div>
       </div>`;
@@ -96,13 +105,14 @@ export function renderPanel(el: HTMLElement, p: PanelProps) {
       <div class="legend">
         <i style="background:#b9b4a6"></i>硬い遮蔽(石垣・土塁・瓦礫):正面から±60°の射撃を×0.2
         <i style="background:#8a6438"></i>軟らかい遮蔽(木柵):正面から±60°の射撃を×0.5。弾は通る
-        <i style="background:rgba(52,110,46,.8)"></i>茂み・果樹林(今は効果なし)
+        <i style="background:rgba(52,110,46,.8)"></i>茂み・果樹林:中にいると、半分の距離まで近づかれないと見つからない
         <i style="background:#5b3d34"></i>建物:入れない。弾をさえぎる
         <i style="background:#ffd60a;border-radius:50%"></i>動揺(制圧値40〜)
         <i style="background:#ff9500;border-radius:50%"></i>制圧(70〜):離脱以外では動かない
         <i style="background:#ff3b30;border-radius:50%"></i>釘付け(100):盲射しかできない
       </div>
-      <div class="hint">白い点は班の残り人数。点線の丸は「最後に見えた場所」への制圧射撃です。</div>
+      <div class="hint">敵は、味方のだれかの視界(扇形)に入っているときだけ見えます。見えなくなった敵は、最後に見えた場所に点線の丸と「○秒前」で表示されます。撃つと2秒間は見つかりやすくなります。視界の外から撃たれると、だいたいの方向が赤くぼんやり表示されます。</div>
+      <div class="hint">白い点は班の残り人数。小さな点線の丸は「最後に見えた場所」への制圧射撃です。</div>
     </div>`;
   el.innerHTML = html;
 

@@ -11,6 +11,7 @@ import {
 } from './config';
 import { angleDiff, angleTo, dist, offsetPerimeterPoints } from './geometry';
 import { effectiveCover, insideBuilding, lineOfFire, protects, walkable } from './terrain';
+import { computeVision, sees } from './vision';
 import { menAlive } from './units';
 import type { MapData, Orders, SimState, Unit, Vec2 } from './types';
 
@@ -33,12 +34,15 @@ function cloneUnit(u: Unit): Unit {
 
 export function cloneState(s: SimState): SimState {
   // 地形は変化しないので共有する
-  return { tick: s.tick, map: s.map, outcome: s.outcome, units: s.units.map(cloneUnit) };
+  // 地形と視界は書き換えずに作り直すので共有してよい
+  return { tick: s.tick, map: s.map, outcome: s.outcome, units: s.units.map(cloneUnit), vision: s.vision };
 }
 
 export function createState(map: MapData, units: Unit[]): SimState {
   const sorted = units.map(cloneUnit).sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
-  return { tick: 0, map, units: sorted, outcome: 'ongoing' };
+  const s: SimState = { tick: 0, map, units: sorted, outcome: 'ongoing', vision: { blue: { visible: [], lastSeen: {} }, red: { visible: [], lastSeen: {} } } };
+  s.vision = computeVision(s);
+  return s;
 }
 
 /**
@@ -76,13 +80,6 @@ export function runPhase(state: SimState, ticks = PHASE_TICKS): SimState[] {
 }
 
 // ---------------------------------------------------------------- 知覚
-
-/** viewer の視界(扇形・距離・射線)に target が入っているか */
-function sees(map: MapData, viewer: Unit, target: Unit): boolean {
-  if (dist(viewer.pos, target.pos) > FIRETEAM.sightRange) return false;
-  if (angleDiff(viewer.facing, angleTo(viewer.pos, target.pos)) > FIRETEAM.sightArc / 2) return false;
-  return lineOfFire(map, viewer.pos, target.pos);
-}
 
 function nearest(from: Vec2, units: Unit[]): Unit | null {
   let best: Unit | null = null;
@@ -203,12 +200,9 @@ export function step(state: SimState): SimState {
   const prevById = new Map(prev.map((u) => [u.id, u]));
 
   // 各陣営が「知っている」敵:味方のだれかの視界に入っている敵と、前のティックにこちらを撃ってきた敵
-  const known = { blue: new Set<string>(), red: new Set<string>() };
+  const known = { blue: new Set(state.vision.blue.visible), red: new Set(state.vision.red.visible) };
   for (const v of prev) {
     if (!v.alive) continue;
-    for (const e of prev) {
-      if (e.alive && e.side !== v.side && sees(map, v, e)) known[v.side].add(e.id);
-    }
     if (v.shot?.targetId) {
       const t = prevById.get(v.shot.targetId);
       if (t) known[t.side].add(v.id);
@@ -414,7 +408,14 @@ export function step(state: SimState): SimState {
     }
   }
 
-  // ---- 4. 勝敗
+  // ---- 4. 発砲による暴露と視界
+  for (const u of s.units) {
+    u.ticksSinceFired = u.shot ? 0 : Math.min(u.ticksSinceFired + 1, Number.MAX_SAFE_INTEGER);
+  }
+  s.tick++;
+  s.vision = computeVision(s);
+
+  // ---- 5. 勝敗
   // 片方の陣営がそもそもいない状態(計画フェイズのプレビュー)では勝敗を決めない
   const has = (side: 'blue' | 'red') => s.units.some((u) => u.side === side);
   if (has('blue') && has('red')) {
@@ -422,6 +423,5 @@ export function step(state: SimState): SimState {
     const red = s.units.some((u) => u.alive && u.side === 'red');
     s.outcome = blue && red ? 'ongoing' : blue ? 'blueWin' : red ? 'redWin' : 'draw';
   }
-  s.tick++;
   return s;
 }

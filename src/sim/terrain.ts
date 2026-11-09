@@ -49,6 +49,11 @@ export function lineOfFire(map: MapData, a: Vec2, b: Vec2): boolean {
   return true;
 }
 
+/** 茂み・草むらの中か */
+export function insideConcealment(map: MapData, p: Vec2): boolean {
+  return map.features.some((f) => f.kind === 'concealment' && pointInPolygon(p, f.poly));
+}
+
 /** 建物の中か(進入不可) */
 export function insideBuilding(map: MapData, p: Vec2): boolean {
   return map.features.some((f) => f.kind === 'building' && pointInPolygon(p, f.poly));

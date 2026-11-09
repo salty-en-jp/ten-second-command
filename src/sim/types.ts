@@ -99,6 +99,8 @@ export interface Unit {
   moved: boolean;
   /** このティックの射撃(描画用) */
   shot: Shot | null;
+  /** 最後に発砲してからのティック数(発砲による暴露に使う) */
+  ticksSinceFired: number;
 }
 
 export interface Shot {
@@ -111,10 +113,20 @@ export interface Shot {
 
 export type Outcome = 'ongoing' | 'blueWin' | 'redWin' | 'draw';
 
+/** ある陣営から見た敵の情報。design.md 4.1 */
+export interface SideVision {
+  /** いま味方のいずれかの視界に入っている敵の id(昇順) */
+  visible: string[];
+  /** 敵ごとの最終確認位置と、そのときのティック */
+  lastSeen: Record<string, { pos: Vec2; tick: number }>;
+}
+
 export interface SimState {
   tick: number;
   map: MapData;
   /** id の昇順で並べる(処理順を固定するため) */
   units: Unit[];
   outcome: Outcome;
+  /** 各陣営の視界(blue = 味方から見た敵の情報) */
+  vision: Record<Side, SideVision>;
 }

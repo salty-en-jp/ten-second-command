@@ -19,6 +19,8 @@ import {
 } from '../sim';
 import {
   drawDeployZone,
+  drawLastSeen,
+  drawUnseenFire,
   drawOrders,
   drawShots,
   drawTerrain,
@@ -44,6 +46,8 @@ export class App {
   private selected: string | null = 'b1';
   private tool: Tool = 'route';
   private showSight: 'selected' | 'all' | 'none' = 'selected';
+  /** 確認用:敵を全部見せる */
+  private revealAll = false;
   private scrubTick = 0;
   private playTick = 0;
   private speed = 1;
@@ -106,7 +110,15 @@ export class App {
         .sort((a, b) => a.d - b.d)[0]?.u;
 
     if (this.tool === 'focus') {
-      const t = near('red', 6);
+      // 見えている敵、または最終確認位置をクリックして指定する
+      const ls = this.current.vision.blue.lastSeen;
+      const t =
+        near('red', 6) && (this.revealAll || this.current.vision.blue.visible.includes(near('red', 6)!.id))
+          ? near('red', 6)
+          : Object.entries(ls)
+              .map(([id, x]) => ({ u: { id }, d: dist(x.pos, p) }))
+              .filter((x) => x.d < 6)
+              .sort((a, b) => a.d - b.d)[0]?.u;
       const o = this.selected ? this.drafts[this.selected] : undefined;
       if (t && o) {
         o.focusTargetId = o.focusTargetId === t.id ? null : t.id;
@@ -226,17 +238,35 @@ export class App {
     if (this.mode === 'planning' && this.phase === 1) drawDeployZone(v, this.stage.deployZone);
 
     let units: Unit[];
+    let frame: SimState = this.current;
     if (this.mode === 'executing' && this.frames.length > 0) {
       const i = Math.floor(this.playTick);
       const a = this.frames[Math.min(i, this.frames.length - 1)]!;
       const b = this.frames[Math.min(i + 1, this.frames.length - 1)]!;
       units = interpolate(a, b, this.playTick - i);
+      frame = b;
     } else {
       units = this.current.units;
     }
 
+    // 視界:味方から見えている敵だけを描く(倒れた敵は、倒したことがわかるので描く)
+    const vis = new Set(frame.vision.blue.visible);
+    const shown = (u: Unit) => u.side === 'blue' || this.revealAll || vis.has(u.id) || !u.alive;
+    if (!this.revealAll) {
+      for (const [id, ls] of Object.entries(frame.vision.blue.lastSeen)) {
+        if (vis.has(id)) continue;
+        drawLastSeen(v, 'red', ls.pos, (frame.tick - ls.tick) / TICKS_PER_SECOND, label({ id }));
+      }
+      // 視界の外からの射撃は、おおまかな方向だけ示す
+      for (const e of units) {
+        if (e.side !== 'red' || shown(e) || !e.shot?.targetId) continue;
+        const t = units.find((x) => x.id === e.shot!.targetId);
+        if (t) drawUnseenFire(v, t.pos, e.pos);
+      }
+    }
+
     if (this.mode === 'planning') {
-      const enemies = units.filter((u) => u.side === 'red');
+      const enemies = units.filter((u) => u.side === 'red' && shown(u));
       for (const u of units) {
         const o = this.drafts[u.id];
         if (o) drawOrders(v, u, o, u.id === this.selected, enemies);
@@ -247,8 +277,9 @@ export class App {
         if (f) for (const g of f.units) drawUnit(v, g, { ghost: true });
       }
     }
-    drawShots(v, units);
+    drawShots(v, units.filter(shown));
     for (const u of units) {
+      if (!shown(u)) continue;
       drawUnit(v, u, {
         selected: this.mode === 'planning' && u.id === this.selected,
         label: label(u),
@@ -310,6 +341,14 @@ export class App {
         .map((m) => `<button data-sight="${m}" class="${this.showSight === m ? 'on' : ''}">${{ selected: '選んだ班と敵', all: '全部', none: '隠す' }[m]}</button>`)
         .join('')}</span>`,
     );
+    this.timeline.insertAdjacentHTML(
+      'beforeend',
+      `<label class="hint"><input type="checkbox" data-reveal ${this.revealAll ? 'checked' : ''}/> 敵を全部見せる(確認用)</label>`,
+    );
+    this.timeline.querySelector<HTMLInputElement>('[data-reveal]')?.addEventListener('change', (e) => {
+      this.revealAll = (e.target as HTMLInputElement).checked;
+      this.refreshUI();
+    });
     this.timeline.querySelectorAll<HTMLButtonElement>('[data-sight]').forEach((b) =>
       b.addEventListener('click', () => {
         this.showSight = b.dataset.sight as typeof this.showSight;
@@ -327,16 +366,20 @@ export class App {
       if (t === this.panelTick) return;
       this.panelTick = t;
     }
-    let units = this.current.units;
+    let frame = this.current;
     if (this.mode === 'executing' && this.frames.length > 0) {
-      units = this.frames[Math.min(Math.floor(this.playTick), this.frames.length - 1)]!.units;
+      frame = this.frames[Math.min(Math.floor(this.playTick), this.frames.length - 1)]!;
     }
+    const units = frame.units;
     const outcomeText =
       this.current.outcome === 'blueWin' ? '勝利:敵を全滅させました'
       : this.current.outcome === 'redWin' ? '敗北:味方が全滅しました'
       : this.current.outcome === 'draw' ? '引き分け:双方が全滅しました'
       : '';
     renderPanel(this.panel, {
+      vision: frame.vision.blue,
+      tick: frame.tick,
+      revealAll: this.revealAll,
       mode: this.mode,
       outcomeText,
       units,
