@@ -100,10 +100,27 @@ export function drawDefenseLine(v: View, y: number) {
   ctx.restore();
 }
 
-export function drawDeployZone(v: View, z: { x: number; y: number; w: number; h: number } | undefined) {
+/** 配置フェイズ:ドラッグ中の部隊の置き先 */
+export function drawDeployGhost(v: View, u: Unit, ok: boolean) {
+  drawUnit(v, u, { ghost: true });
+  const p = toScreen(v, u.pos);
+  v.ctx.save();
+  v.ctx.strokeStyle = ok ? '#7dff9a' : '#ff5a46';
+  v.ctx.lineWidth = 2;
+  v.ctx.beginPath();
+  v.ctx.arc(p.x, p.y, 12, 0, Math.PI * 2);
+  v.ctx.stroke();
+  v.ctx.restore();
+}
+
+export function drawDeployZone(v: View, z: { x: number; y: number; w: number; h: number } | undefined, active = false) {
   if (!z) return;
   const a = toScreen(v, { x: z.x, y: z.y + z.h });
-  v.ctx.strokeStyle = 'rgba(90,169,255,0.25)';
+  if (active) {
+    v.ctx.fillStyle = 'rgba(90,169,255,0.10)';
+    v.ctx.fillRect(a.x, a.y, z.w * v.scale, z.h * v.scale);
+  }
+  v.ctx.strokeStyle = active ? 'rgba(90,169,255,0.8)' : 'rgba(90,169,255,0.25)';
   v.ctx.setLineDash([4, 4]);
   v.ctx.strokeRect(a.x, a.y, z.w * v.scale, z.h * v.scale);
   v.ctx.setLineDash([]);

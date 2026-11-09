@@ -1,0 +1,246 @@
+{
+  "id": "crossroads",
+  "name": "十字路の村(配置あり)",
+  "description": "十字路の村を、敵の射撃班2つが南の石垣と生け垣にこもって守っている。初めて自分で配置を決めるミッション。南の配置エリアのどこに、どの部隊を置くかから考えよう。西には林と果樹園、東には生け垣が続く。",
+  "par": 10,
+  "width": 300,
+  "height": 200,
+  "deployment": true,
+  "features": [
+    {
+      "id": "woodsW",
+      "kind": "concealment",
+      "note": "南西の林",
+      "rect": {
+        "cx": 60,
+        "cy": 22,
+        "w": 100,
+        "h": 34
+      }
+    },
+    {
+      "id": "hedgeE",
+      "kind": "concealment",
+      "note": "南東から村へ続く生け垣",
+      "rect": {
+        "cx": 245,
+        "cy": 85,
+        "w": 4,
+        "h": 110
+      }
+    },
+    {
+      "id": "orchard",
+      "kind": "concealment",
+      "note": "北西の果樹園",
+      "rect": {
+        "cx": 45,
+        "cy": 150,
+        "w": 40,
+        "h": 40
+      }
+    },
+    {
+      "id": "ditch",
+      "kind": "hard",
+      "note": "牧草地の側溝",
+      "rect": {
+        "cx": 150,
+        "cy": 80,
+        "w": 50,
+        "h": 1.5
+      }
+    },
+    {
+      "id": "wreck",
+      "kind": "soft",
+      "note": "放棄された荷車",
+      "rect": {
+        "cx": 95,
+        "cy": 95,
+        "w": 6,
+        "h": 3
+      }
+    },
+    {
+      "id": "wallS",
+      "kind": "hard",
+      "note": "村の南の石垣",
+      "rect": {
+        "cx": 150,
+        "cy": 147,
+        "w": 60,
+        "h": 1
+      }
+    },
+    {
+      "id": "hedgeVillage",
+      "kind": "concealment",
+      "note": "石垣に沿った生け垣。中の敵は見つかりにくい",
+      "rect": {
+        "cx": 150,
+        "cy": 149.5,
+        "w": 60,
+        "h": 4
+      }
+    },
+    {
+      "id": "wallW",
+      "kind": "hard",
+      "note": "村の西の石垣",
+      "rect": {
+        "cx": 100,
+        "cy": 167,
+        "w": 1,
+        "h": 30
+      }
+    },
+    {
+      "id": "wallE",
+      "kind": "hard",
+      "note": "村の東の石垣",
+      "rect": {
+        "cx": 200,
+        "cy": 167,
+        "w": 1,
+        "h": 30
+      }
+    },
+    {
+      "id": "houseC",
+      "kind": "building",
+      "note": "村の家",
+      "rect": {
+        "cx": 150,
+        "cy": 167,
+        "w": 16,
+        "h": 12
+      }
+    },
+    {
+      "id": "houseN",
+      "kind": "building",
+      "note": "村の家",
+      "rect": {
+        "cx": 125,
+        "cy": 193,
+        "w": 14,
+        "h": 10
+      }
+    },
+    {
+      "id": "houseNE",
+      "kind": "building",
+      "note": "村の家",
+      "rect": {
+        "cx": 178,
+        "cy": 193,
+        "w": 14,
+        "h": 10
+      }
+    }
+  ],
+  "units": [
+    {
+      "id": "b1",
+      "name": "第1班",
+      "side": "blue",
+      "x": 120,
+      "y": 20,
+      "facingDeg": 90
+    },
+    {
+      "id": "b2",
+      "name": "第2班",
+      "side": "blue",
+      "x": 180,
+      "y": 20,
+      "facingDeg": 90
+    },
+    {
+      "id": "bs",
+      "name": "狙撃手",
+      "kind": "sniper",
+      "side": "blue",
+      "x": 150,
+      "y": 12,
+      "facingDeg": 90
+    },
+    {
+      "id": "m1",
+      "name": "迫撃砲班",
+      "kind": "mortar",
+      "side": "blue",
+      "x": 150,
+      "y": 6,
+      "facingDeg": 90
+    },
+    {
+      "id": "r1",
+      "name": "敵A",
+      "side": "red",
+      "x": 160,
+      "y": 148.5,
+      "facingDeg": -90
+    },
+    {
+      "id": "r2",
+      "name": "敵B",
+      "side": "red",
+      "x": 135,
+      "y": 148.5,
+      "facingDeg": -90
+    }
+  ],
+  "ai": {
+    "personality": "defense",
+    "side": "red",
+    "positions": {
+      "r1": [
+        {
+          "x": 160,
+          "y": 148.5,
+          "facingDeg": -90
+        },
+        {
+          "x": 198.5,
+          "y": 160,
+          "facingDeg": 0
+        }
+      ],
+      "r2": [
+        {
+          "x": 135,
+          "y": 148.5,
+          "facingDeg": -90
+        },
+        {
+          "x": 101.5,
+          "y": 160,
+          "facingDeg": 180
+        }
+      ]
+    },
+    "flankPoints": [
+      {
+        "x": 85,
+        "y": 137
+      },
+      {
+        "x": 215,
+        "y": 137
+      }
+    ]
+  },
+  "aiLabel": {
+    "name": "防御型",
+    "description": "陣地から下がらない。横を突かれると向きを変え、別の陣地へ移る。迫られて数で勝てば、一度だけ横から反撃してくる。",
+    "hint": "二方向から同時に"
+  },
+  "deployZone": {
+    "x": 10,
+    "y": 5,
+    "w": 280,
+    "h": 20
+  }
+}
