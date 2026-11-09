@@ -36,11 +36,19 @@ export function renderPanel(el: HTMLElement, p: PanelProps) {
   const blue = p.units.filter((u) => u.side === 'blue');
   const red = p.units.filter((u) => u.side === 'red');
   const status = (u: Unit) => {
+    if (u.mountedIn !== null && u.alive) {
+      if (u.side === 'red' && !p.revealAll) return `<div class="hint">${label(u)}:見えていない</div>`;
+      return `<div class="hint">${label(u)}:${label({ id: u.mountedIn })}に乗車中(耐久 ${Math.ceil(u.hp)}/100)${u.atRounds > 0 ? `、対戦車火器 ${u.atRounds}発` : ''}</div>`;
+    }
     if (u.side === 'red' && u.alive && !p.revealAll && !p.vision.visible.includes(u.id)) {
       const ls = p.vision.lastSeen[u.id];
       return `<div class="hint">${label(u)}:見えていない${ls ? `(最終確認 ${((p.tick - ls.tick) / TICKS_PER_SECOND).toFixed(0)}秒前)` : '(まだ見つけていない)'}</div>`;
     }
-    const max = u.kind === 'sniper' ? 25 : u.kind === 'mortar' ? MORTAR.maxHp : 100;
+    const max = u.kind === 'sniper' ? 25 : u.kind === 'mortar' ? MORTAR.maxHp : u.kind === 'ifv' ? 200 : 100;
+    const extra =
+      u.kind === 'ifv' && u.alive
+        ? `${u.suppression >= 70 ? '、ハッチを閉めている(視界が狭い)' : ''}${u.passengerId ? `、${label({ id: u.passengerId })}が乗車中` : ''}`
+        : u.atRounds > 0 && u.alive ? `、対戦車火器 ${u.atRounds}発${u.atAimTicks > 0 ? '(構えている)' : ''}` : '';
     const mortarState = { packed: '収納(移動できる)', deploying: '展開中', deployed: '展開済(撃てる)', packing: '撤収中' };
     const mortar =
       u.kind === 'mortar' && u.alive
@@ -50,7 +58,7 @@ export function renderPanel(el: HTMLElement, p: PanelProps) {
       u.kind === 'sniper' && u.alive
         ? u.cooldownTicks > 0 ? `、装填中 あと${(u.cooldownTicks / TICKS_PER_SECOND).toFixed(1)}秒` : u.aimTargetId ? `、${label({ id: u.aimTargetId })}を狙っている` : ''
         : '';
-    return `<div class="hint">${label(u)}:耐久 ${Math.ceil(u.hp)}/${max}、制圧値 ${Math.round(u.suppression)}(${stateText(u)})${sniper}${mortar}</div>`;
+    return `<div class="hint">${label(u)}:耐久 ${Math.ceil(u.hp)}/${max}、制圧値 ${Math.round(u.suppression)}(${stateText(u)})${sniper}${mortar}${extra}</div>`;
   };
 
   let html = '';
@@ -82,6 +90,21 @@ export function renderPanel(el: HTMLElement, p: PanelProps) {
           : '集中して撃つ敵をクリックします。もう一度クリックで解除。'
         }</div>
       </div>
+      ${u.kind === 'ifv' ? `
+      <div class="group"><h3>IFV</h3>
+        ${u.passengerId ? `<div class="row">${btn('data-dismount="1"', '経路の終点で下車させる', !!o.dismount)}${btn('data-dismount="0"', '乗せたまま', !o.dismount)}</div>
+        <div class="hint">${label({ id: u.passengerId })}が乗っています。止まってから${3}秒で、車体の後ろ5 mに降ります。降りたあとは${label({ id: u.passengerId })}の経路を進みます。</div>` : '<div class="hint">だれも乗っていません。射撃班の「乗車する」で乗せられます。</div>'}
+        <div class="hint">小銃は効きません。対戦車火器と機関砲に注意。正面より横・後ろが弱い。土塁などの縁で止まると車体を隠せます(ハルダウン)。小銃で撃たれ続けるとハッチを閉め、視界が狭くなります。</div>
+      </div>` : ''}
+      ${u.kind === 'fireteam' ? `
+      <div class="group"><h3>乗車・対戦車火器</h3>
+        ${u.mountedIn !== null ? `<div class="hint">${label({ id: u.mountedIn })}に乗車中です。経路は、降りたあとに進む道になります。</div>` : p.units
+          .filter((x) => x.kind === 'ifv' && x.side === 'blue' && x.alive && (x.passengerId === null || x.passengerId === u.id))
+          .map((x) => `<div class="row">${btn(`data-mount="${x.id}"`, `${label(x)}に乗車する`, o.mountId === x.id)}${o.mountId ? btn('data-mount=""', '乗車をやめる', false) : ''}</div>`)
+          .join('')}
+        ${u.atRounds > 0 ? `<div class="row">${btn('data-atuse="1"', `対戦車火器を使う(${u.atRounds}発)`, o.atAllowed !== false)}${btn('data-atuse="0"', '使わない', o.atAllowed === false)}</div>
+        <div class="hint">見えている敵の IFV が 10〜150 m にいれば、2秒構えて撃ちます。横か後ろに当てないとほとんど効きません(横から2発で撃破)。撃つと後ろ10 mの味方に爆風が当たります。</div>` : ''}
+      </div>` : ''}
       ${u.kind === 'mortar' ? `
       <div class="group"><h3>迫撃砲</h3>
         <div class="row">${btn('data-deploy="1"', '展開する(撃てる状態に)', !!o.deploy)}${btn('data-deploy="0"', '展開しない', !o.deploy)}</div>
@@ -129,6 +152,8 @@ export function renderPanel(el: HTMLElement, p: PanelProps) {
         <i style="background:#8a6438"></i>軟らかい遮蔽(木柵):正面から±60°の射撃を×0.5。弾は通る
         <i style="background:rgba(52,110,46,.8)"></i>茂み・果樹林:中にいると、半分の距離まで近づかれないと見つからない
         <i style="background:#5b3d34"></i>建物:入れない。弾をさえぎる
+        <i style="background:#5aa9ff;border-radius:1px"></i>長方形=IFV(三角が車体の前、線が砲身)。小銃は効かない。IFV の機関砲で撃たれ続けた石垣・土塁は崩れて瓦礫(軟らかい遮蔽)になる
+        <i style="background:#ffb36b"></i>オレンジの小さな四角=対戦車火器を持っている班
         <i style="border:2px solid #ffe07a"></i>迫撃砲の着弾範囲:内側の輪(8 m)で被害、外側の輪(15 m)で制圧。伏せると×0.5、遮蔽の内側なら×0.3
         <i style="background:#ffd60a;border-radius:50%"></i>動揺(制圧値40〜)
         <i style="background:#ff9500;border-radius:50%"></i>制圧(70〜):離脱以外では動かない
@@ -150,6 +175,9 @@ export function renderPanel(el: HTMLElement, p: PanelProps) {
     }));
   on('[data-act=undoPoint]', () => (p.tool === 'withdraw' ? o.withdrawRoute.pop() : o.route.pop()));
   on('[data-deploy]', (b) => (o.deploy = b.dataset.deploy === '1'));
+  on('[data-dismount]', (b) => (o.dismount = b.dataset.dismount === '1'));
+  on('[data-mount]', (b) => (o.mountId = b.dataset.mount || null));
+  on('[data-atuse]', (b) => (o.atAllowed = b.dataset.atuse === '1'));
   on('[data-delmission]', (b) => o.fireMissions?.splice(Number(b.dataset.delmission), 1));
   el.querySelectorAll<HTMLInputElement>('[data-at]').forEach((inp) =>
     inp.addEventListener('change', () => {

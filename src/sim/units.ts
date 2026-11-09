@@ -10,6 +10,18 @@ export function makeFireteam(id: string, side: Side, pos: Vec2, facing: number, 
   return makeUnit('fireteam', id, side, pos, facing, orders);
 }
 
+/** IFV を作る */
+export function makeIfv(id: string, side: Side, pos: Vec2, facing: number, orders?: Partial<Orders>): Unit {
+  return makeUnit('ifv', id, side, pos, facing, orders);
+}
+
+/** 射撃班を IFV に乗せた状態にする(ステージの初期配置用) */
+export function mount(passenger: Unit, ifv: Unit): void {
+  passenger.mountedIn = ifv.id;
+  passenger.pos = { ...ifv.pos };
+  ifv.passengerId = passenger.id;
+}
+
 /** 迫撃砲班を作る */
 export function makeMortar(id: string, side: Side, pos: Vec2, facing: number, orders?: Partial<Orders>): Unit {
   return makeUnit('mortar', id, side, pos, facing, orders);
@@ -35,6 +47,14 @@ export function makeUnit(kind: UnitKind, id: string, side: Side, pos: Vec2, faci
     adjustedAim: null,
     duckTicks: 0,
     shelledOnly: false,
+    mountedIn: null,
+    passengerId: null,
+    mountTicks: 0,
+    turret: facing,
+    atRounds: 0,
+    atTargetId: null,
+    atAimTicks: 0,
+    atShot: null,
     suppression: 0,
     alive: true,
     prone: false,

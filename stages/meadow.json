@@ -1,0 +1,204 @@
+{
+  "id": "meadow",
+  "name": "牧草地の装甲車(IFV)",
+  "description": "牧草地の中央、土塁の陰に敵の IFV が車体を隠して待ち構え、生け垣と農家の石垣に敵の歩兵がいる。こちらは IFV 1両(第2班が乗車中)と第1班。IFV は小銃では倒せない。対戦車火器を横か後ろから2発。",
+  "width": 300,
+  "height": 200,
+  "features": [
+    {
+      "id": "woodsS",
+      "kind": "concealment",
+      "note": "味方側の雑木林。中にいれば見つかりにくい",
+      "rect": {
+        "cx": 150,
+        "cy": 20,
+        "w": 300,
+        "h": 30
+      }
+    },
+    {
+      "id": "bermS",
+      "kind": "hard",
+      "note": "味方側の低い土塁。IFV の車体を隠して撃てる",
+      "rect": {
+        "cx": 150,
+        "cy": 55,
+        "w": 30,
+        "h": 2
+      }
+    },
+    {
+      "id": "bermC",
+      "kind": "hard",
+      "note": "中央の土塁。敵の IFV がハルダウンしている",
+      "rect": {
+        "cx": 150,
+        "cy": 128,
+        "w": 24,
+        "h": 2
+      }
+    },
+    {
+      "id": "laneWall",
+      "kind": "hard",
+      "note": "西の沈み道の土手。道は敵の IFV から見えない",
+      "rect": {
+        "cx": 58,
+        "cy": 92,
+        "w": 1.5,
+        "h": 124
+      }
+    },
+    {
+      "id": "orchard",
+      "kind": "concealment",
+      "note": "北西の果樹園",
+      "rect": {
+        "cx": 55,
+        "cy": 168,
+        "w": 60,
+        "h": 30
+      }
+    },
+    {
+      "id": "hedge",
+      "kind": "concealment",
+      "note": "生け垣。敵の歩兵が潜む",
+      "rect": {
+        "cx": 100,
+        "cy": 141,
+        "w": 40,
+        "h": 4
+      }
+    },
+    {
+      "id": "farm",
+      "kind": "building",
+      "note": "農家",
+      "rect": {
+        "cx": 215,
+        "cy": 162,
+        "w": 20,
+        "h": 12
+      }
+    },
+    {
+      "id": "farmWall",
+      "kind": "hard",
+      "note": "農家の石垣。対戦車火器を持った敵の歩兵",
+      "rect": {
+        "cx": 215,
+        "cy": 145,
+        "w": 26,
+        "h": 1
+      }
+    },
+    {
+      "id": "houseE1",
+      "kind": "building",
+      "note": "東の家並み。間の細い道は待ち伏せの罠",
+      "rect": {
+        "cx": 245,
+        "cy": 90,
+        "w": 14,
+        "h": 70
+      }
+    },
+    {
+      "id": "houseE2",
+      "kind": "building",
+      "note": "東の家並み",
+      "rect": {
+        "cx": 280,
+        "cy": 90,
+        "w": 14,
+        "h": 70
+      }
+    },
+    {
+      "id": "wreck",
+      "kind": "soft",
+      "note": "放棄された車両",
+      "rect": {
+        "cx": 115,
+        "cy": 95,
+        "w": 6,
+        "h": 3
+      }
+    }
+  ],
+  "units": [
+    {
+      "id": "bv",
+      "name": "IFV",
+      "kind": "ifv",
+      "side": "blue",
+      "x": 150,
+      "y": 22,
+      "facingDeg": 90
+    },
+    {
+      "id": "b1",
+      "name": "第1班",
+      "side": "blue",
+      "x": 110,
+      "y": 20,
+      "facingDeg": 90,
+      "at": 1
+    },
+    {
+      "id": "b2",
+      "name": "第2班",
+      "side": "blue",
+      "x": 150,
+      "y": 22,
+      "facingDeg": 90,
+      "at": 1,
+      "mountedIn": "bv"
+    },
+    {
+      "id": "rv",
+      "name": "敵IFV",
+      "kind": "ifv",
+      "side": "red",
+      "x": 150,
+      "y": 130.2,
+      "facingDeg": -90,
+      "orders": {
+        "fire": "free",
+        "policy": "hold"
+      }
+    },
+    {
+      "id": "r1",
+      "name": "敵A",
+      "side": "red",
+      "x": 100,
+      "y": 141,
+      "facingDeg": -90,
+      "orders": {
+        "fire": "free",
+        "policy": "hold"
+      }
+    },
+    {
+      "id": "r2",
+      "name": "敵B",
+      "side": "red",
+      "x": 215,
+      "y": 146.5,
+      "facingDeg": -90,
+      "at": 1,
+      "orders": {
+        "fire": "free",
+        "policy": "hold"
+      }
+    }
+  ],
+  "deployZone": {
+    "x": 30,
+    "y": 5,
+    "w": 240,
+    "h": 35
+  }
+}

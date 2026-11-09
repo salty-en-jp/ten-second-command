@@ -5,16 +5,20 @@ import {
   COVER,
   DAMAGE,
   FIRETEAM,
+  AT_WEAPON,
+  IFV,
   MORTAR,
   PHASE_TICKS,
+  WALL,
   SNIPER,
   SUPPRESSION,
   unitStats,
   TICKS_PER_SECOND,
 } from './config';
 import { angleDiff, angleTo, dist, offsetPerimeterPoints } from './geometry';
-import { effectiveCover, insideBuilding, lineOfFire, protects, walkable } from './terrain';
+import { effectiveCover, insideBuilding, lineOfFire, occupies, protectingHard, protects, walkable } from './terrain';
 import { computeVision, sees } from './vision';
+import { atDecide, dismountStep, ifvDamageFactor, ifvFollowRoute, ifvFollowWithdraw, inBackblast, mountStep, onIfvDestroyed, turnToward } from './ifv';
 import { blastEffect, inAnyCover, pointObserved, queueMissions, tryFire, updateMortarState, WARNING_TICKS } from './mortar';
 import { menAlive } from './units';
 import type { MapData, Orders, SimState, Unit, Vec2 } from './types';
@@ -51,6 +55,7 @@ export function cloneState(s: SimState): SimState {
     shells: s.shells, // 弾は書き換えずに配列ごと作り直す
     nextShellId: s.nextShellId,
     impacts: s.impacts,
+    wallDamage: { ...s.wallDamage },
   };
 }
 
@@ -65,6 +70,7 @@ export function createState(map: MapData, units: Unit[]): SimState {
     shells: [],
     nextShellId: 1,
     impacts: [],
+    wallDamage: {},
   };
   s.vision = computeVision(s);
   return s;
@@ -218,6 +224,7 @@ function sniperDecide(
   const cands = enemies.filter(
     (e) =>
       known.has(e.id) &&
+      e.kind !== 'ifv' &&
       dist(u.pos, e.pos) <= SNIPER.range &&
       angleDiff(center, angleTo(u.pos, e.pos)) <= SNIPER.arcWidth / 2 &&
       lineOfFire(map, u.pos, e.pos),
@@ -247,6 +254,60 @@ function sniperDecide(
     u.cooldownTicks = Math.round(SNIPER.cooldownSec * TICKS_PER_SECOND);
     u.aimTicks = 0;
   }
+}
+
+// ---------------------------------------------------------------- IFV
+
+/**
+ * IFV の1ティック(歩兵の接触ドリルは使わない)
+ * - 敵を見つけたり撃たれたりしたら、接触後の方針に従う:保持=止まって車体を敵へ向ける、
+ *   前進=経路を続けながら撃つ、離脱=離脱経路で下がる
+ * - 砲塔は自動で目標を向く。撃てる相手は射撃班と同じく陣営が知っている敵
+ * - 経路の終点で止まっていて「下車」が命じられていれば、乗っている班を降ろす
+ */
+function ifvTick(u: Unit, pu: Unit, seen: Unit[], wasShot: boolean, canFire: boolean, enemies: Unit[], known: Set<string>, s: SimState): void {
+  const map = s.map;
+  // 射撃禁止なら、敵を見ただけでは反応しない(撃たれたら反応する)
+  const e = canFire ? nearest(u.pos, seen) : null;
+  const threat = e ? e.pos : wasShot && !pu.shelledOnly && pu.lastShotFrom ? pu.lastShotFrom : null;
+  if (threat) u.threatPos = { ...threat };
+  if (u.activity === 'route' && threat) {
+    u.activity =
+      u.orders.policy === 'advance' ? 'advancing'
+      : u.orders.policy === 'withdraw' && u.withdrawIndex < u.orders.withdrawRoute.length ? 'withdrawing'
+      : 'engaged';
+    if (u.activity === 'withdrawing') u.routeIndex = u.orders.route.length;
+  }
+  u.quietTicks = seen.length === 0 && !wasShot ? u.quietTicks + 1 : 0;
+  if (u.activity !== 'route' && u.activity !== 'withdrawing' && u.quietTicks >= QUIET_TICKS) u.activity = 'route';
+
+  switch (u.activity) {
+    case 'withdrawing':
+      ifvFollowWithdraw(map, u);
+      break;
+    case 'engaged':
+      if (u.threatPos) turnToward(u, angleTo(u.pos, u.threatPos));
+      break;
+    default:
+      ifvFollowRoute(map, u);
+      if (u.routeIndex >= u.orders.route.length && u.orders.facing !== null && !u.moved) turnToward(u, u.orders.facing);
+  }
+
+  if (canFire) {
+    const targets = enemies.filter(
+      (t) => known.has(t.id) && t.mountedIn === null && dist(u.pos, t.pos) <= IFV.cannonRange && lineOfFire(map, u.pos, t.pos),
+    );
+    if (u.orders.focusTargetId !== null && !targets.some((t) => t.id === u.orders.focusTargetId) && !enemies.some((t) => t.id === u.orders.focusTargetId)) {
+      u.orders = { ...u.orders, focusTargetId: null };
+    }
+    const t = targets.find((x) => x.id === u.orders.focusTargetId) ?? nearest(u.pos, targets);
+    if (t) {
+      aim(u, t, false);
+      u.turret = angleTo(u.pos, t.pos);
+    } else u.turret = u.facing;
+  } else u.turret = u.facing;
+
+  if (u.passengerId) dismountStep(u, s.units.find((x) => x.id === u.passengerId), map);
 }
 
 // ---------------------------------------------------------------- 1ティック
@@ -302,7 +363,8 @@ export function step(state: SimState): SimState {
   for (const u of s.units) {
     u.moved = false;
     u.shot = null;
-    if (!u.alive) continue;
+    u.atShot = null;
+    if (!u.alive || u.mountedIn !== null) continue; // 乗車中は何もしない(位置はあとで車両に合わせる)
     const pu = prevById.get(u.id)!;
     const enemies = prev.filter((e) => e.alive && e.side !== u.side);
     const seen = enemies.filter((e) => sees(map, pu, e));
@@ -311,6 +373,11 @@ export function step(state: SimState): SimState {
 
     if (u.orders.fire === 'hold' && !u.holdFireLifted && (wasShot || discovered)) u.holdFireLifted = true;
     const canFire = u.orders.fire === 'free' || u.holdFireLifted;
+
+    if (u.kind === 'ifv') {
+      ifvTick(u, pu, seen, wasShot, canFire, enemies, known[u.side], s);
+      continue;
+    }
 
     // 迫撃砲だけに撃たれた(撃ってきた方向がない):遮蔽の内側ならとどまり、そうでなければ伏せる
     if (u.activity === 'route' && pu.shelledOnly && seen.length === 0) {
@@ -339,9 +406,16 @@ export function step(state: SimState): SimState {
     const mortarCanMove = u.kind === 'mortar' ? updateMortarState(u) : true;
     if (u.duckTicks > 0) u.duckTicks--;
     const canMove = !isSuppressed(u) && mortarCanMove && u.duckTicks === 0;
+    const mountTarget = u.orders.mountId ? s.units.find((x) => x.id === u.orders.mountId) : undefined;
     switch (u.activity) {
       case 'route':
-        if (canMove) followRoute(map, u);
+        if (u.orders.mountId) {
+          // 乗車:IFV の後ろへ歩いて行き、止まっている IFV に 3 秒で乗る
+          const spot = mountStep(u, mountTarget);
+          if (spot && canMove) moveToward(map, u, spot, unitStats(u.kind).speed);
+          if (!spot && u.mountedIn === null) u.orders = { ...u.orders, mountId: null };
+          if (u.mountedIn !== null) continue;
+        } else if (canMove) followRoute(map, u);
         break;
       case 'reacting':
         if (canMove) followRoute(map, u); // 反応するまでは前の行動を続ける
@@ -436,6 +510,12 @@ export function step(state: SimState): SimState {
       }
     }
 
+    // 軽対戦車火器(射撃班のみ。見えている敵の IFV へ)
+    if (u.kind === 'fireteam' && u.atRounds > 0 && atDecide(u, enemies, known[u.side], canFire && !isPinned(u), map)) {
+      const t = prevById.get(u.atShot!)!;
+      u.lastFire = { tick: s.tick + 1, point: { ...t.pos } };
+    }
+
     // 向き(スナイパーは「向き」を指定されていれば射界を見張り続ける)
     if (u.kind === 'sniper' && u.orders.facing !== null) u.facing = u.orders.facing;
     else if (u.activity !== 'route' && u.threatPos) u.facing = angleTo(u.pos, u.threatPos);
@@ -465,16 +545,31 @@ export function step(state: SimState): SimState {
       if (shooter.shot.targetId !== null) hit(shooter.shot.targetId, SNIPER.damage, SNIPER.suppression, from, true);
       continue;
     }
-    const power =
-      (menAlive(shooter) / unitStats(shooter.kind).men) *
-      shooterFactor(shooter) *
-      (shooter.kind === 'mortar' ? MORTAR.smallArmsFactor : 1);
+    const isCannon = shooter.kind === 'ifv';
+    const power = isCannon
+      ? 1
+      : (menAlive(shooter) / unitStats(shooter.kind).men) *
+        shooterFactor(shooter) *
+        (shooter.kind === 'mortar' ? MORTAR.smallArmsFactor : 1);
+    const firepower = isCannon ? IFV.firepower : FIRETEAM.firepower;
+    const suppPerSec = isCannon ? IFV.suppressionPerSec : SUPPRESSION.perFireteamPerSec;
     const strong = shooter.suppression < SUPPRESSION.stopsRecoveryBelow;
     const blindDmg = shooter.shot.blind ? BLIND_FIRE.damage : 1;
     const blindSupp = shooter.shot.blind ? BLIND_FIRE.suppression : 1;
-    if (shooter.shot.targetId !== null) {
+    if (shooter.shot.targetId !== null && prevById.get(shooter.shot.targetId)!.kind === 'ifv') {
+      // IFV を撃つ:小銃は装甲に効かず(制圧値だけ)、機関砲は当たった面で効き方が変わる
       const t = prevById.get(shooter.shot.targetId)!;
-      const r = rangeFactor(dist(from, t.pos)) * power;
+      const f = isCannon ? ifvDamageFactor(map, t, from, 'cannon') : 0;
+      const r = isCannon ? 1 : rangeFactor(dist(from, t.pos)) * power;
+      hit(t.id, (firepower * f) / TICKS_PER_SECOND, (suppPerSec * r) / TICKS_PER_SECOND, from, strong);
+    } else if (shooter.shot.targetId !== null) {
+      const t = prevById.get(shooter.shot.targetId)!;
+      const r = (isCannon ? 1 : rangeFactor(dist(from, t.pos))) * power;
+      // IFV の機関砲に撃たれ続けた硬い遮蔽は崩れる
+      if (isCannon) {
+        const wall = protectingHard(map, t.pos, from);
+        if (wall) s.wallDamage[wall.id] = (s.wallDamage[wall.id] ?? 0) + 1;
+      }
       const cover = effectiveCover(map, t.pos, from);
       const tf = cover === 'hard' ? COVER.hardDamage
         : cover === 'soft' ? COVER.softDamage
@@ -484,8 +579,8 @@ export function step(state: SimState): SimState {
       const sf = cover ? COVER.suppressionFactor : 1;
       hit(
         t.id,
-        (FIRETEAM.firepower * r * tf * blindDmg) / TICKS_PER_SECOND,
-        (SUPPRESSION.perFireteamPerSec * r * sf * blindSupp) / TICKS_PER_SECOND,
+        (firepower * r * tf * blindDmg) / TICKS_PER_SECOND,
+        (suppPerSec * r * sf * blindSupp) / TICKS_PER_SECOND,
         from,
         strong,
       );
@@ -494,11 +589,37 @@ export function step(state: SimState): SimState {
       const p = shooter.shot.point;
       const r = rangeFactor(dist(from, p)) * power * SUPPRESSION.suppressiveFireFactor;
       for (const t of prev) {
-        if (!t.alive || t.side === shooter.side || dist(t.pos, p) > SUPPRESSION.suppressiveFireRadius) continue;
+        if (!t.alive || t.mountedIn !== null || t.side === shooter.side || dist(t.pos, p) > SUPPRESSION.suppressiveFireRadius) continue;
         const sf = effectiveCover(map, t.pos, from) ? COVER.suppressionFactor : 1;
         hit(t.id, 0, (SUPPRESSION.perFireteamPerSec * r * sf) / TICKS_PER_SECOND, from, strong);
       }
     }
+  }
+
+  // ---- 2a. 軽対戦車火器と後方爆風、壁の崩壊
+  for (const shooter of s.units) {
+    if (!shooter.atShot) continue;
+    shooterId = shooter.id;
+    const from = prevById.get(shooter.id)!.pos;
+    const t = prevById.get(shooter.atShot)!;
+    hit(t.id, AT_WEAPON.damage * ifvDamageFactor(map, t, from, 'at'), AT_WEAPON.suppression, from, true);
+    for (const f of s.units) {
+      if (!f.alive || f.mountedIn !== null || f.id === shooter.id || !inBackblast(from, t.pos, f.pos)) continue;
+      hit(f.id, AT_WEAPON.backblastDamage, AT_WEAPON.backblastSuppression, from, true);
+    }
+  }
+  for (const [id, ticks] of Object.entries(s.wallDamage)) {
+    if (ticks < Math.round(WALL.collapseSec * TICKS_PER_SECOND)) continue;
+    const wall = s.map.features.find((f) => f.id === id && f.kind === 'hard');
+    delete s.wallDamage[id];
+    if (!wall) continue;
+    shooterId = '';
+    for (const u of s.units) {
+      if (!u.alive || u.mountedIn !== null || !occupies(u.pos, wall)) continue;
+      hit(u.id, WALL.collapseDamage, WALL.collapseSuppression, u.pos, true);
+      shelled.add(u.id);
+    }
+    s.map = { ...s.map, features: s.map.features.map((f) => (f === wall ? { ...f, kind: 'soft' as const } : f)) };
   }
 
   // ---- 2b. 迫撃砲弾:飛翔音の予兆と着弾(位置はこのティックに動いたあと)
@@ -507,7 +628,7 @@ export function step(state: SimState): SimState {
   for (const sh of s.shells) {
     if (sh.impactTick - nextTick !== WARNING_TICKS) continue;
     for (const u of s.units) {
-      if (!u.alive || dist(u.pos, sh.impact) > MORTAR.warningRadius) continue;
+      if (!u.alive || u.mountedIn !== null || u.kind === 'ifv' || dist(u.pos, sh.impact) > MORTAR.warningRadius) continue;
       // 遮蔽の内側ならその場にとどまり、そうでなければ伏せる(FM 7-8、TC 3-21.75 7-17)
       if (!inAnyCover(map, u.pos)) u.prone = true;
       u.duckTicks = Math.max(u.duckTicks, WARNING_TICKS + 1);
@@ -516,7 +637,16 @@ export function step(state: SimState): SimState {
   for (const sh of landed) {
     shooterId = sh.shooterId;
     for (const t of s.units) {
-      if (!t.alive) continue;
+      if (!t.alive || t.mountedIn !== null) continue;
+      if (t.kind === 'ifv') {
+        // 装甲車には直撃しか効かない(破片は装甲で防ぐ)。乗員はハッチを閉める(制圧値)
+        const d = dist(t.pos, sh.impact);
+        if (d > MORTAR.suppressRadius) continue;
+        const dmg = d <= IFV.mortarDirectHitRadius ? MORTAR.centerDamage * ifvDamageFactor(map, t, sh.impact, 'mortarDirect') : 0;
+        hit(t.id, dmg, MORTAR.suppression, sh.impact, true);
+        shelled.add(t.id);
+        continue;
+      }
       const e = blastEffect(map, t, sh.impact);
       if (!e) continue;
       const directFire = supp.has(t.id);
@@ -560,13 +690,19 @@ export function step(state: SimState): SimState {
       u.hp = 0;
       u.alive = false;
       u.shot = null;
+      if (u.kind === 'ifv') onIfvDestroyed(s, u);
     }
   }
 
   // ---- 4. 発砲による暴露と視界
   for (const u of s.units) {
     const firedMortar = u.kind === 'mortar' && u.lastFire?.tick === s.tick + 1;
-    u.ticksSinceFired = u.shot || firedMortar ? 0 : Math.min(u.ticksSinceFired + 1, Number.MAX_SAFE_INTEGER);
+    u.ticksSinceFired = u.shot || u.atShot || firedMortar ? 0 : Math.min(u.ticksSinceFired + 1, Number.MAX_SAFE_INTEGER);
+    // 乗車中の班は車両と一緒に動く
+    if (u.mountedIn !== null) {
+      const v = s.units.find((x) => x.id === u.mountedIn);
+      if (v) u.pos = { ...v.pos };
+    }
   }
   s.tick++;
   s.vision = computeVision(s);

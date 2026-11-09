@@ -114,7 +114,7 @@ export class App {
 
     const near = (side: 'blue' | 'red', radius: number) =>
       this.current.units
-        .filter((u) => u.alive && u.side === side)
+        .filter((u) => u.alive && u.side === side && u.mountedIn === null)
         .map((u) => ({ u, d: dist(u.pos, p) }))
         .filter((x) => x.d < radius)
         .sort((a, b) => a.d - b.d)[0]?.u;
@@ -250,6 +250,9 @@ export class App {
   private draw() {
     const v = this.view;
     v.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+    // 地形は状態の中にある(壁が崩れる、車両の残骸が増えるため)
+    const terrainFrame = this.mode === 'executing' && this.frames.length > 0 ? this.frames[Math.min(Math.floor(this.playTick) + 1, this.frames.length - 1)]! : this.current;
+    v.map = terrainFrame.map;
     drawTerrain(v);
     if (this.mode === 'planning' && this.phase === 1) drawDeployZone(v, this.stage.deployZone);
 
@@ -267,7 +270,7 @@ export class App {
 
     // 視界:味方から見えている敵だけを描く(倒れた敵は、倒したことがわかるので描く)
     const vis = new Set(frame.vision.blue.visible);
-    const shown = (u: Unit) => u.side === 'blue' || this.revealAll || vis.has(u.id) || !u.alive;
+    const shown = (u: Unit) => u.mountedIn === null && (u.side === 'blue' || this.revealAll || vis.has(u.id) || !u.alive);
     if (!this.revealAll) {
       for (const [id, ls] of Object.entries(frame.vision.blue.lastSeen)) {
         if (vis.has(id)) continue;
