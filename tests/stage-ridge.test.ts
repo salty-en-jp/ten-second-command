@@ -19,7 +19,7 @@ function play(plan: Record<number, Record<string, Partial<Orders>>>, phases: num
   const out: SimState[] = [s];
   for (let p = 1; p <= phases && s.outcome === 'ongoing'; p++) {
     const o: Record<string, Orders> = {};
-    for (const u of s.units) if (u.side === 'blue' && u.alive) o[u.id] = carryOver(u);
+    for (const u of s.units) if (u.side === 'blue' && u.alive) o[u.id] = carryOver(u, s.tick);
     for (const [id, ch] of Object.entries(plan[p] ?? {})) o[id] = O(ch);
     s = runPhase(issueOrders(s, o)).at(-1)!;
     out.push(s);

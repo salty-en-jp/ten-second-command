@@ -9,6 +9,8 @@ import {
   PHASE_TICKS,
   runPhase,
   TICKS_PER_SECOND,
+  MORTAR,
+  WARNING_TICKS,
   dist,
   angleTo,
   type Orders,
@@ -22,6 +24,11 @@ import {
   drawLastSeen,
   drawUnseenFire,
   drawTracers,
+  drawFireMissions,
+  drawImpacts,
+  drawIncomingWarning,
+  drawMortarRange,
+  drawShells,
   drawOrders,
   drawShots,
   drawTerrain,
@@ -144,7 +151,11 @@ export class App {
       x: Math.max(0, Math.min(this.view.map.width, p.x)),
       y: Math.max(0, Math.min(this.view.map.height, p.y)),
     };
-    if (this.tool === 'route') o.route.push({ pos: clamped, waitSec: 0 });
+    if (this.tool === 'mortar') {
+      const ms = (o.fireMissions ??= []);
+      const last = ms.at(-1);
+      ms.push({ target: clamped, atSec: last ? Math.min(10, last.atSec + 2) : 0 });
+    } else if (this.tool === 'route') o.route.push({ pos: clamped, waitSec: 0 });
     else if (this.tool === 'withdraw') o.withdrawRoute.push(clamped);
     else if (this.tool === 'facing') {
       const from = o.route.at(-1)?.pos ?? u.pos;
@@ -158,7 +169,8 @@ export class App {
     if (this.mode !== 'planning' || !this.selected) return;
     const o = this.drafts[this.selected];
     if (!o) return;
-    if (this.tool === 'withdraw') o.withdrawRoute.pop();
+    if (this.tool === 'mortar') o.fireMissions?.pop();
+    else if (this.tool === 'withdraw') o.withdrawRoute.pop();
     else o.route.pop();
     this.changed();
   }
@@ -282,6 +294,24 @@ export class App {
       if (this.scrubTick > 0) {
         const f = this.preview[Math.min(this.scrubTick, this.preview.length) - 1];
         if (f) for (const g of f.units) drawUnit(v, g, { ghost: true });
+      }
+    }
+    // 迫撃砲:味方の弾の着弾予定位置、着弾、計画中の射撃、射程
+    drawShells(v, frame.shells, 'blue', frame.tick);
+    drawImpacts(v, frame.impacts, frame.tick);
+    if (this.mode === 'planning') {
+      for (const u of units) {
+        const o = this.drafts[u.id];
+        if (u.kind !== 'mortar' || !o) continue;
+        if (u.id === this.selected) drawMortarRange(v, u);
+        drawFireMissions(v, u, o.fireMissions ?? []);
+      }
+    }
+    // 敵の弾の飛翔音:着弾 0.5 秒前から、近くの味方に表示
+    for (const sh of frame.shells) {
+      if (sh.side === 'blue' || sh.impactTick - frame.tick > WARNING_TICKS) continue;
+      for (const u of units) {
+        if (u.side === 'blue' && u.alive && Math.hypot(u.pos.x - sh.impact.x, u.pos.y - sh.impact.y) <= MORTAR.warningRadius) drawIncomingWarning(v, u);
       }
     }
     drawShots(v, units.filter(shown));

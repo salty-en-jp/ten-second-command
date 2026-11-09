@@ -5,6 +5,7 @@ import {
   COVER,
   DAMAGE,
   FIRETEAM,
+  MORTAR,
   PHASE_TICKS,
   SNIPER,
   SUPPRESSION,
@@ -14,6 +15,7 @@ import {
 import { angleDiff, angleTo, dist, offsetPerimeterPoints } from './geometry';
 import { effectiveCover, insideBuilding, lineOfFire, protects, walkable } from './terrain';
 import { computeVision, sees } from './vision';
+import { blastEffect, inAnyCover, pointObserved, queueMissions, tryFire, updateMortarState, WARNING_TICKS } from './mortar';
 import { menAlive } from './units';
 import type { MapData, Orders, SimState, Unit, Vec2 } from './types';
 
@@ -32,18 +34,38 @@ function cloneUnit(u: Unit): Unit {
     lastFire: u.lastFire && { tick: u.lastFire.tick, point: { ...u.lastFire.point } },
     shot: u.shot && { ...u.shot, point: { ...u.shot.point } },
     orders: u.orders,
+    missionQueue: u.missionQueue.map((m) => ({ target: { ...m.target }, tick: m.tick })),
+    adjustedAim: u.adjustedAim && { ...u.adjustedAim },
   };
 }
 
 export function cloneState(s: SimState): SimState {
   // 地形は変化しないので共有する
   // 地形と視界は書き換えずに作り直すので共有してよい
-  return { tick: s.tick, map: s.map, outcome: s.outcome, units: s.units.map(cloneUnit), vision: s.vision };
+  return {
+    tick: s.tick,
+    map: s.map,
+    outcome: s.outcome,
+    units: s.units.map(cloneUnit),
+    vision: s.vision,
+    shells: s.shells, // 弾は書き換えずに配列ごと作り直す
+    nextShellId: s.nextShellId,
+    impacts: s.impacts,
+  };
 }
 
 export function createState(map: MapData, units: Unit[]): SimState {
   const sorted = units.map(cloneUnit).sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
-  const s: SimState = { tick: 0, map, units: sorted, outcome: 'ongoing', vision: { blue: { visible: [], lastSeen: {} }, red: { visible: [], lastSeen: {} } } };
+  const s: SimState = {
+    tick: 0,
+    map,
+    units: sorted,
+    outcome: 'ongoing',
+    vision: { blue: { visible: [], lastSeen: {} }, red: { visible: [], lastSeen: {} } },
+    shells: [],
+    nextShellId: 1,
+    impacts: [],
+  };
   s.vision = computeVision(s);
   return s;
 }
@@ -61,7 +83,9 @@ export function issueOrders(state: SimState, orders: Record<string, Orders>): Si
       ...o,
       route: o.route.map((w) => ({ pos: { ...w.pos }, waitSec: w.waitSec })),
       withdrawRoute: o.withdrawRoute.map((p) => ({ ...p })),
+      fireMissions: (o.fireMissions ?? []).map((m) => ({ target: { ...m.target }, atSec: m.atSec })),
     };
+    if (u.kind === 'mortar') queueMissions(u, state.tick);
     u.routeIndex = 0;
     u.waitTicksLeft = -1;
     u.withdrawIndex = 0;
@@ -111,6 +135,7 @@ function moveToward(map: MapData, u: Unit, target: Vec2, speed: number): boolean
   if (!walkable(map, u.pos, next)) return false; // 建物にぶつかる:止まる
   u.pos = next;
   u.moved = true;
+  u.prone = false; // 動き出したら立つ
   return d <= stepLen;
 }
 
@@ -287,6 +312,11 @@ export function step(state: SimState): SimState {
     if (u.orders.fire === 'hold' && !u.holdFireLifted && (wasShot || discovered)) u.holdFireLifted = true;
     const canFire = u.orders.fire === 'free' || u.holdFireLifted;
 
+    // 迫撃砲だけに撃たれた(撃ってきた方向がない):遮蔽の内側ならとどまり、そうでなければ伏せる
+    if (u.activity === 'route' && pu.shelledOnly && seen.length === 0) {
+      u.activity = 'engaged';
+      if (!inAnyCover(map, u.pos)) u.prone = true;
+    }
     // 接触の発生
     if (u.activity === 'route' && (wasShot || (canFire && seen.length > 0))) {
       u.activity = 'reacting';
@@ -294,7 +324,7 @@ export function step(state: SimState): SimState {
       const e = nearest(u.pos, seen);
       u.threatPos = e ? { ...e.pos } : wasShot && pu.lastShotFrom ? { ...pu.lastShotFrom } : null;
     }
-    if (wasShot && pu.lastShotFrom && seen.length === 0) u.threatPos = { ...pu.lastShotFrom };
+    if (wasShot && !pu.shelledOnly && pu.lastShotFrom && seen.length === 0) u.threatPos = { ...pu.lastShotFrom };
 
     // 接触の終了(敵が見えず、撃たれもしない状態が続いた)
     u.quietTicks = seen.length === 0 && !wasShot ? u.quietTicks + 1 : 0;
@@ -305,7 +335,10 @@ export function step(state: SimState): SimState {
     }
 
     // 移動
-    const canMove = !isSuppressed(u);
+    // 迫撃砲は収納していないと動けない。飛翔音で伏せている間も動かない
+    const mortarCanMove = u.kind === 'mortar' ? updateMortarState(u) : true;
+    if (u.duckTicks > 0) u.duckTicks--;
+    const canMove = !isSuppressed(u) && mortarCanMove && u.duckTicks === 0;
     switch (u.activity) {
       case 'route':
         if (canMove) followRoute(map, u);
@@ -357,6 +390,13 @@ export function step(state: SimState): SimState {
 
     // 射撃目標:陣営が知っている敵のうち、射程内で射線の通る敵
     const inContact = u.activity !== 'route' && u.activity !== 'reacting';
+    if (u.kind === 'mortar') {
+      const shell = tryFire(u, s.tick + 1, map, s.nextShellId, isPinned(u));
+      if (shell) {
+        s.shells = [...s.shells, shell];
+        s.nextShellId++;
+      }
+    }
     if (u.kind === 'sniper') {
       sniperDecide(u, pu, enemies, known[u.side], canFire && inContact, map, prevById, s.tick + 1);
     } else if (canFire && inContact) {
@@ -407,6 +447,7 @@ export function step(state: SimState): SimState {
   const dmg = new Map<string, number>();
   const supp = new Map<string, number>();
   const shotFrom = new Map<string, { pos: Vec2; id: string }>();
+  const shelled = new Set<string>();
   const stopsRecovery = new Set<string>();
   let shooterId = '';
   const hit = (id: string, d: number, sp: number, from: Vec2, strong: boolean) => {
@@ -424,7 +465,10 @@ export function step(state: SimState): SimState {
       if (shooter.shot.targetId !== null) hit(shooter.shot.targetId, SNIPER.damage, SNIPER.suppression, from, true);
       continue;
     }
-    const power = (menAlive(shooter) / FIRETEAM.men) * shooterFactor(shooter);
+    const power =
+      (menAlive(shooter) / unitStats(shooter.kind).men) *
+      shooterFactor(shooter) *
+      (shooter.kind === 'mortar' ? MORTAR.smallArmsFactor : 1);
     const strong = shooter.suppression < SUPPRESSION.stopsRecoveryBelow;
     const blindDmg = shooter.shot.blind ? BLIND_FIRE.damage : 1;
     const blindSupp = shooter.shot.blind ? BLIND_FIRE.suppression : 1;
@@ -457,17 +501,52 @@ export function step(state: SimState): SimState {
     }
   }
 
+  // ---- 2b. 迫撃砲弾:飛翔音の予兆と着弾(位置はこのティックに動いたあと)
+  const nextTick = s.tick + 1;
+  const landed = s.shells.filter((sh) => sh.impactTick === nextTick);
+  for (const sh of s.shells) {
+    if (sh.impactTick - nextTick !== WARNING_TICKS) continue;
+    for (const u of s.units) {
+      if (!u.alive || dist(u.pos, sh.impact) > MORTAR.warningRadius) continue;
+      // 遮蔽の内側ならその場にとどまり、そうでなければ伏せる(FM 7-8、TC 3-21.75 7-17)
+      if (!inAnyCover(map, u.pos)) u.prone = true;
+      u.duckTicks = Math.max(u.duckTicks, WARNING_TICKS + 1);
+    }
+  }
+  for (const sh of landed) {
+    shooterId = sh.shooterId;
+    for (const t of s.units) {
+      if (!t.alive) continue;
+      const e = blastEffect(map, t, sh.impact);
+      if (!e) continue;
+      const directFire = supp.has(t.id);
+      hit(t.id, e.damage, e.suppression, sh.impact, true);
+      if (!directFire) shelled.add(t.id);
+    }
+    // 狙った地点を味方が見ていれば(観測者が着弾を見て修正を伝える)、次からはその付近に正確に落ちる
+    const shooter = s.units.find((u) => u.id === sh.shooterId);
+    if (shooter && pointObserved(s, sh.side, sh.aim)) shooter.adjustedAim = { ...sh.aim };
+  }
+  if (landed.length > 0) s.shells = s.shells.filter((sh) => sh.impactTick !== nextTick);
+  s.impacts = [
+    ...s.impacts.filter((im) => nextTick - im.tick <= TICKS_PER_SECOND),
+    ...landed.map((sh) => ({ pos: { ...sh.impact }, tick: nextTick, side: sh.side })),
+  ];
+
   // ---- 3. 反映
   for (const u of s.units) {
     if (!u.alive) continue;
     const sp = supp.get(u.id);
     u.firedOn = sp !== undefined;
+    u.shelledOnly = shelled.has(u.id);
     if (sp !== undefined) {
       u.hp -= dmg.get(u.id) ?? 0;
       u.suppression += sp;
-      const sf = shotFrom.get(u.id)!;
-      u.lastShotFrom = { ...sf.pos };
-      u.lastShooterId = sf.id;
+      if (!u.shelledOnly) {
+        const sf = shotFrom.get(u.id)!;
+        u.lastShotFrom = { ...sf.pos };
+        u.lastShooterId = sf.id;
+      }
     }
     if (stopsRecovery.has(u.id)) {
       u.ticksSinceShot = 0;
@@ -486,7 +565,8 @@ export function step(state: SimState): SimState {
 
   // ---- 4. 発砲による暴露と視界
   for (const u of s.units) {
-    u.ticksSinceFired = u.shot ? 0 : Math.min(u.ticksSinceFired + 1, Number.MAX_SAFE_INTEGER);
+    const firedMortar = u.kind === 'mortar' && u.lastFire?.tick === s.tick + 1;
+    u.ticksSinceFired = u.shot || firedMortar ? 0 : Math.min(u.ticksSinceFired + 1, Number.MAX_SAFE_INTEGER);
   }
   s.tick++;
   s.vision = computeVision(s);

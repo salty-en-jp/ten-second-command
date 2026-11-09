@@ -63,9 +63,53 @@ export const SNIPER = {
   suppression: 50,
 } as const;
 
+/**
+ * 迫撃砲班。design.md 6.3(60mm 迫撃砲 M224 の班を縮尺に合わせて抽象化。FM 23-90、ATP 3-21.90)
+ */
+export const MORTAR = {
+  maxHp: 75,
+  hpPerMan: 25,
+  men: 3,
+  /** m/秒 (暫定) */
+  speed: 1.5,
+  proneSpeed: 0.8,
+  sightRange: 120,
+  sightArc: 120 * DEG,
+  /** 撃てる状態にする(展開)までの秒数 (暫定) */
+  deploySec: 4,
+  /** 移動できる状態にする(撤収)までの秒数 (暫定) */
+  packSec: 3,
+  /** 発射から着弾までの秒数 (暫定) */
+  flightSec: 4,
+  /** 射程 (暫定) */
+  minRange: 50,
+  maxRange: 400,
+  /** 弾数 (暫定) */
+  rounds: 8,
+  /** 連続発射の間隔(秒) (暫定) */
+  intervalSec: 2,
+  /** 着弾効果 (暫定) */
+  lethalRadius: 8,
+  centerDamage: 60,
+  suppressRadius: 15,
+  suppression: 40,
+  /** 迫撃砲の被害の係数:伏せている目標 / 遮蔽の内側の目標(上から落ちるので遮蔽の向きは問わない) */
+  proneFactor: 0.5,
+  coverFactor: 0.3,
+  /** 観測されていない射撃は、狙った地点から迫撃砲の反対側へこれだけずれる(m) */
+  unobservedError: 12,
+  /** 着弾を味方が見ていれば、その地点からこの半径(m)以内への次の射撃は正確になる */
+  adjustRadius: 15,
+  /** 飛翔音の予兆:着弾のこの秒数前に、着弾点からこの半径以内のユニットが伏せる */
+  warningSec: 0.5,
+  warningRadius: 15,
+  /** 自衛の小銃射撃の火力(射撃班に対する倍率) */
+  smallArmsFactor: 0.5,
+} as const;
+
 /** 兵科ごとの基本の値 */
-export function unitStats(kind: 'fireteam' | 'sniper') {
-  return kind === 'sniper' ? SNIPER : FIRETEAM;
+export function unitStats(kind: 'fireteam' | 'sniper' | 'mortar') {
+  return kind === 'sniper' ? SNIPER : kind === 'mortar' ? MORTAR : FIRETEAM;
 }
 
 /** 接触時の自動行動。design.md 7章 */

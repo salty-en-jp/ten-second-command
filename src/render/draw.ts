@@ -1,7 +1,7 @@
 /**
  * 描画:sim の状態を読んで Canvas に描くだけ。状態は書き換えない。
  */
-import { SNIPER, SUPPRESSION, unitStats, type MapData, type Orders, type SimState, type TerrainKind, type Unit, type Vec2 } from '../sim';
+import { MORTAR, SNIPER, SUPPRESSION, unitStats, type Shell, type MapData, type Orders, type SimState, type TerrainKind, type Unit, type Vec2 } from '../sim';
 import { menAlive } from '../sim/units';
 
 export interface View {
@@ -154,6 +154,120 @@ export interface UnitDrawOptions {
   arcCenter?: number;
 }
 
+/** 迫撃砲の射程(最小・最大)の輪 */
+export function drawMortarRange(v: View, u: Unit) {
+  const { ctx, scale } = v;
+  const p = toScreen(v, u.pos);
+  ctx.save();
+  ctx.strokeStyle = 'rgba(255,224,122,0.35)';
+  ctx.setLineDash([2, 6]);
+  for (const r of [MORTAR.minRange, MORTAR.maxRange]) {
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, r * scale, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+/** 着弾範囲(殺傷 8 m と制圧 15 m の輪)と文字 */
+function blastMarker(v: View, at: Vec2, color: string, text: string, dashed: boolean) {
+  const { ctx, scale } = v;
+  const p = toScreen(v, at);
+  ctx.save();
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 1.5;
+  ctx.setLineDash(dashed ? [4, 4] : []);
+  ctx.beginPath();
+  ctx.arc(p.x, p.y, MORTAR.lethalRadius * scale, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.globalAlpha = 0.5;
+  ctx.beginPath();
+  ctx.arc(p.x, p.y, MORTAR.suppressRadius * scale, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.globalAlpha = 1;
+  ctx.setLineDash([]);
+  ctx.beginPath();
+  ctx.moveTo(p.x - 4, p.y - 4);
+  ctx.lineTo(p.x + 4, p.y + 4);
+  ctx.moveTo(p.x + 4, p.y - 4);
+  ctx.lineTo(p.x - 4, p.y + 4);
+  ctx.stroke();
+  ctx.fillStyle = '#fff';
+  ctx.font = '11px system-ui';
+  ctx.textAlign = 'center';
+  ctx.fillText(text, p.x, p.y - MORTAR.suppressRadius * scale - 4);
+  ctx.restore();
+}
+
+/** 計画中の射撃命令(観測が済んでいない地点は、遠くへずれる見込みも示す) */
+export function drawFireMissions(v: View, u: Unit, missions: Array<{ target: Vec2; atSec: number }>) {
+  // 同じ地点(1 m 以内)への命令はまとめて1つの印にする
+  const groups: Array<{ target: Vec2; times: number[] }> = [];
+  for (const m of missions) {
+    const g = groups.find((x) => Math.hypot(x.target.x - m.target.x, x.target.y - m.target.y) < 1);
+    if (g) g.times.push(m.atSec);
+    else groups.push({ target: m.target, times: [m.atSec] });
+  }
+  groups.forEach((m) => {
+    const adjusted = u.adjustedAim && Math.hypot(u.adjustedAim.x - m.target.x, u.adjustedAim.y - m.target.y) <= MORTAR.adjustRadius;
+    blastMarker(v, m.target, '#ffe07a', `${m.times.length}発:${m.times.join('・')}秒に発射${adjusted ? '' : '(観測が済むまでは遠くへずれる)'}`, !adjusted);
+    if (!adjusted) {
+      const d = Math.hypot(m.target.x - u.pos.x, m.target.y - u.pos.y) || 1;
+      const off = { x: m.target.x + ((m.target.x - u.pos.x) / d) * MORTAR.unobservedError, y: m.target.y + ((m.target.y - u.pos.y) / d) * MORTAR.unobservedError };
+      const a = toScreen(v, m.target);
+      const b = toScreen(v, off);
+      v.ctx.save();
+      v.ctx.strokeStyle = 'rgba(255,224,122,0.6)';
+      v.ctx.setLineDash([2, 3]);
+      v.ctx.beginPath();
+      v.ctx.moveTo(a.x, a.y);
+      v.ctx.lineTo(b.x, b.y);
+      v.ctx.stroke();
+      v.ctx.restore();
+    }
+  });
+}
+
+/** 飛んでいる味方の迫撃砲弾の着弾予定位置 */
+export function drawShells(v: View, shells: Shell[], side: 'blue' | 'red', tick: number) {
+  for (const sh of shells) {
+    if (sh.side !== side) continue;
+    blastMarker(v, sh.impact, '#ff9f43', `着弾まで ${((sh.impactTick - tick) / 20).toFixed(1)}秒`, false);
+  }
+}
+
+/** 着弾(1 秒かけて広がって消える) */
+export function drawImpacts(v: View, impacts: Array<{ pos: Vec2; tick: number }>, tick: number) {
+  const { ctx, scale } = v;
+  for (const im of impacts) {
+    const age = (tick - im.tick) / 20;
+    if (age < 0 || age > 1) continue;
+    const p = toScreen(v, im.pos);
+    ctx.save();
+    ctx.globalAlpha = 1 - age;
+    ctx.fillStyle = 'rgba(255,170,60,0.5)';
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, MORTAR.lethalRadius * scale * (0.5 + age), 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(255,230,180,0.8)';
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, MORTAR.suppressRadius * scale * (0.3 + age), 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+  }
+}
+
+/** 敵の迫撃砲の飛翔音(着弾 0.5 秒前):近くの味方の頭上に「ヒュッ」 */
+export function drawIncomingWarning(v: View, u: Unit) {
+  const p = toScreen(v, u.pos);
+  v.ctx.save();
+  v.ctx.fillStyle = '#ffd60a';
+  v.ctx.font = 'bold 12px system-ui';
+  v.ctx.textAlign = 'center';
+  v.ctx.fillText('ヒュッ!', p.x, p.y - 26);
+  v.ctx.restore();
+}
+
 /** スナイパーの1発(撃ってから 0.5 秒だけ光る線) */
 export function drawTracers(v: View, units: Unit[], tick: number) {
   const { ctx } = v;
@@ -251,7 +365,10 @@ export function drawUnit(v: View, u: Unit, opt: UnitDrawOptions = {}) {
   ctx.strokeStyle = '#111';
   ctx.lineWidth = 1.5;
   ctx.beginPath();
-  if (u.kind === 'sniper') {
+  if (u.kind === 'mortar') {
+    const k = r * 0.85;
+    ctx.rect(p.x - k, p.y - k, k * 2, k * 2);
+  } else if (u.kind === 'sniper') {
     const k = r * 0.9;
     ctx.moveTo(p.x, p.y - k);
     ctx.lineTo(p.x + k, p.y);

@@ -6,7 +6,29 @@ export interface Vec2 {
 export type Side = 'blue' | 'red';
 
 /** 兵科 */
-export type UnitKind = 'fireteam' | 'sniper';
+export type UnitKind = 'fireteam' | 'sniper' | 'mortar';
+
+/** 迫撃砲の射撃命令:フェイズ開始から atSec 秒後に target へ1発 */
+export interface FireMission {
+  target: Vec2;
+  atSec: number;
+}
+
+/** 飛んでいる迫撃砲弾 */
+export interface Shell {
+  id: number;
+  side: Side;
+  shooterId: string;
+  /** 狙った地点 */
+  aim: Vec2;
+  /** 実際に落ちる地点 */
+  impact: Vec2;
+  firedTick: number;
+  impactTick: number;
+}
+
+/** 迫撃砲の状態:収納(移動できる)/展開中/展開済(撃てる)/撤収中 */
+export type MortarState = 'packed' | 'deploying' | 'deployed' | 'packing';
 
 /** design.md 4.2 の地形の種類(開けた地面は「何もない場所」として扱う) */
 export type TerrainKind = 'hard' | 'soft' | 'concealment' | 'building';
@@ -49,6 +71,10 @@ export interface Orders {
    * 指定した敵が撃てない(知らない・射程外・射線が通らない)ときは、一番近い敵を撃つ。
    */
   focusTargetId: string | null;
+  /** 迫撃砲:経路の終点で展開して撃てる状態にする */
+  deploy?: boolean;
+  /** 迫撃砲:射撃命令 */
+  fireMissions?: FireMission[];
 }
 
 /**
@@ -116,6 +142,21 @@ export interface Unit {
   aimTicks: number;
   /** 最後に撃ったティックと着弾点(描画用) */
   lastFire: { tick: number; point: Vec2 } | null;
+
+  // ---- 迫撃砲用
+  mortarState: MortarState;
+  /** 展開・撤収の残りティック */
+  mortarTicks: number;
+  rounds: number;
+  /** まだ撃っていない射撃命令(撃つティックつき) */
+  missionQueue: Array<{ target: Vec2; tick: number }>;
+  /** 着弾を味方が見て修正が済んだ地点 */
+  adjustedAim: Vec2 | null;
+
+  /** 飛翔音で伏せている残りティック(この間は動かない) */
+  duckTicks: number;
+  /** 前のティックに受けた射撃が迫撃砲だけだったか(撃ってきた方向がない) */
+  shelledOnly: boolean;
 }
 
 export interface Shot {
@@ -144,4 +185,9 @@ export interface SimState {
   outcome: Outcome;
   /** 各陣営の視界(blue = 味方から見た敵の情報) */
   vision: Record<Side, SideVision>;
+  /** 飛んでいる迫撃砲弾 */
+  shells: Shell[];
+  nextShellId: number;
+  /** 最近の着弾(描画用。1秒で消える) */
+  impacts: Array<{ pos: Vec2; tick: number; side: Side }>;
 }
