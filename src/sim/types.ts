@@ -81,6 +81,11 @@ export interface Orders {
   mountId?: string | null;
   /** 射撃班:軽対戦車火器の使用許可(省略時は許可) */
   atAllowed?: boolean;
+  /**
+   * 射撃開始線(敵 AI の待ち伏せ用):射撃禁止のとき、陣営が知っている敵がこの距離(m)以内に入ったら撃ち始める。
+   * null/省略なら使わない。
+   */
+  openFireRange?: number | null;
 }
 
 /**
@@ -215,4 +220,20 @@ export interface SimState {
   impacts: Array<{ pos: Vec2; tick: number; side: Side }>;
   /** 硬い遮蔽ごとの、IFV の機関砲に撃たれた累計ティック(壁の崩壊) */
   wallDamage: Record<string, number>;
+  /** 防衛線:守る側の陣営と、攻める側がこの y より手前(小さい側)に入ったら守る側の負け */
+  defenseLine?: { defender: Side; y: number } | null;
+  /** 敵 AI の記憶(フェイズをまたいで覚えておくこと) */
+  ai?: AiMemory;
+}
+
+/** 敵 AI の記憶 */
+export interface AiMemory {
+  /** ユニットごとの、今いる陣地の番号 */
+  posIndex: Record<string, number>;
+  /** 最初に撃ち始めたティック(待ち伏せ型の撤収判断) */
+  firstFireTick: number | null;
+  /** 反撃をもう使ったか(防御型) */
+  counterUsed: boolean;
+  /** 回り込みに向かっているユニット(突撃型・防御型の反撃) */
+  flanking: Record<string, boolean>;
 }

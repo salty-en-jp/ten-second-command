@@ -3,10 +3,13 @@ import village from '../stages/mvp.json';
 import ridge from '../stages/ridge.json';
 import hill from '../stages/hill.json';
 import meadow from '../stages/meadow.json';
+import outskirtsA from '../stages/outskirts-a.json';
+import outskirtsB from '../stages/outskirts-b.json';
+import outskirtsC from '../stages/outskirts-c.json';
 import { App } from './ui/app';
 import { renderMissionSelect } from './ui/missions';
 
-const STAGES = [village, ridge, hill, meadow] as StageData[];
+const STAGES = [village, ridge, hill, meadow, outskirtsA, outskirtsB, outskirtsC] as StageData[];
 const $ = (id: string) => document.getElementById(id)!;
 
 // URL の #ステージid で直接そのミッションを開く(再読み込みしても同じミッションのまま)

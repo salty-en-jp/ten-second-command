@@ -5,6 +5,7 @@
 import {
   issueOrders,
   loadStage,
+  planAi,
   PHASE_SECONDS,
   PHASE_TICKS,
   runPhase,
@@ -21,6 +22,7 @@ import {
 } from '../sim';
 import {
   drawDeployZone,
+  drawDefenseLine,
   drawLastSeen,
   drawUnseenFire,
   drawTracers,
@@ -73,7 +75,7 @@ export class App {
     setLabels(stage.units);
     canvas.style.aspectRatio = `${stage.width} / ${stage.height}`;
     this.initial = loadStage(stage);
-    this.current = this.initial;
+    this.current = planAi(this.initial, stage); // 敵 AI は計画フェイズの開始時に命令を出す
     this.drafts = draftsFor(this.current);
     const ctx = canvas.getContext('2d')!;
     this.view = { ctx, scale: 1, map: this.initial.map };
@@ -189,6 +191,7 @@ export class App {
 
   private finishPhase() {
     this.current = this.frames.at(-1)!;
+    if (this.current.outcome === 'ongoing') this.current = planAi(this.current, this.stage);
     this.frames = [];
     if (this.current.outcome !== 'ongoing') {
       this.mode = 'over';
@@ -204,7 +207,7 @@ export class App {
   }
 
   retry() {
-    this.current = this.initial;
+    this.current = planAi(this.initial, this.stage);
     this.drafts = draftsFor(this.current);
     this.frames = [];
     this.mode = 'planning';
@@ -255,6 +258,7 @@ export class App {
     v.map = terrainFrame.map;
     drawTerrain(v);
     if (this.mode === 'planning' && this.phase === 1) drawDeployZone(v, this.stage.deployZone);
+    if (this.current.defenseLine) drawDefenseLine(v, this.current.defenseLine.y);
 
     let units: Unit[];
     let frame: SimState = this.current;
@@ -348,13 +352,16 @@ export class App {
   private refreshUI() {
     const outcomeText =
       this.current.outcome === 'blueWin' ? '勝利:敵を全滅させました'
-      : this.current.outcome === 'redWin' ? '敗北:味方が全滅しました'
+      : this.current.outcome === 'redWin'
+        ? this.current.units.some((u) => u.side === 'blue' && u.alive) ? '敗北:防衛線を突破されました' : '敗北:味方が全滅しました'
       : this.current.outcome === 'draw' ? '引き分け:双方が全滅しました'
       : '';
+    const ai = this.stage.aiLabel ? `敵:${this.stage.aiLabel.name}(${this.stage.aiLabel.hint})  ` : '';
     this.status.textContent =
-      this.mode === 'over' ? outcomeText
+      ai +
+      (this.mode === 'over' ? outcomeText
       : this.mode === 'executing' ? `フェイズ ${this.phase}:実行中`
-      : `フェイズ ${this.phase}:計画(時間停止中)`;
+      : `フェイズ ${this.phase}:計画(時間停止中)`);
 
     // タイムライン
     const planning = this.mode === 'planning';
@@ -417,7 +424,8 @@ export class App {
     const units = frame.units;
     const outcomeText =
       this.current.outcome === 'blueWin' ? '勝利:敵を全滅させました'
-      : this.current.outcome === 'redWin' ? '敗北:味方が全滅しました'
+      : this.current.outcome === 'redWin'
+        ? this.current.units.some((u) => u.side === 'blue' && u.alive) ? '敗北:防衛線を突破されました' : '敗北:味方が全滅しました'
       : this.current.outcome === 'draw' ? '引き分け:双方が全滅しました'
       : '';
     renderPanel(this.panel, {

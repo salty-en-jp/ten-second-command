@@ -3,6 +3,7 @@ import { rect } from './geometry';
 import { defaultOrders, makeUnit, mount } from './units';
 import type { MapData, Orders, Side, SimState, TerrainFeature, TerrainKind, UnitKind, Vec2 } from './types';
 import { createState } from './step';
+import { applyAi, type AiPlan } from './ai';
 
 /** ステージ JSON の形。角度は度数で書く */
 export interface StageData {
@@ -35,6 +36,12 @@ export interface StageData {
     /** 軽対戦車火器の弾数(射撃班のオプション装備) */
     at?: number;
   }>;
+  /** 敵 AI(省略時は決まった命令のまま) */
+  ai?: AiPlan;
+  /** ミッション選択画面とゲーム中に出す、敵の性格の説明 */
+  aiLabel?: { name: string; description: string; hint: string };
+  /** 防衛線:守る側と、攻める側が越えたら負けになる y */
+  defenseLine?: { defender: Side; y: number };
   /** 配置可能エリア(後の段階で使う) */
   deployZone?: { x: number; y: number; w: number; h: number };
 }
@@ -63,5 +70,12 @@ export function loadStage(data: StageData): SimState {
     const v = units.find((x) => x.id === u.mountedIn);
     if (v) mount(p, v);
   }
-  return createState(map, units);
+  const state = createState(map, units);
+  if (data.defenseLine) state.defenseLine = { ...data.defenseLine };
+  return state;
+}
+
+/** ステージに敵 AI があれば、計画フェイズの開始時に AI の命令を出す */
+export function planAi(state: SimState, data: StageData): SimState {
+  return data.ai ? applyAi(state, data.ai) : state;
 }

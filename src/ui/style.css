@@ -95,3 +95,4 @@ button:disabled { opacity: 0.4; cursor: default; }
 .mission p { margin: 0 0 8px; line-height: 1.6; }
 .mission .num { color: var(--accent); font-size: 12px; }
 header a.back { color: var(--muted); font-size: 13px; }
+.mission .ai { margin: 0 0 8px; padding: 6px 8px; background: rgba(255,107,90,0.12); border-left: 3px solid var(--red); font-size: 13px; line-height: 1.6; }
