@@ -186,12 +186,13 @@ export function atDecide(u: Unit, enemies: Unit[], known: Set<string>, ready: bo
     return null;
   }
   const cands = enemies
-    .filter((e) => e.kind === 'ifv' && known.has(e.id))
+    // 撃つのは IFV と、建物の中の班(壁ごと撃つ。FM 90-10-1 8-7)。IFV を先に狙う
+    .filter((e) => (e.kind === 'ifv' || e.inBuilding !== null) && known.has(e.id))
     .filter((e) => {
       const d = dist(u.pos, e.pos);
       return d >= AT_WEAPON.minRange && d <= AT_WEAPON.range && lineOfFire(map, u.pos, e.pos) && !smokeBlocks(map, u.pos, e.pos);
     })
-    .map((e) => ({ e, f: ifvDamageFactor(map, e, u.pos, 'at'), d: dist(u.pos, e.pos) }))
+    .map((e) => ({ e, f: e.kind === 'ifv' ? 1 + ifvDamageFactor(map, e, u.pos, 'at') : 0, d: dist(u.pos, e.pos) }))
     .sort((a, b) => b.f - a.f || a.d - b.d);
   const t = cands[0]?.e;
   if (!t) {

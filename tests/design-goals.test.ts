@@ -3,7 +3,7 @@
  * 数値を変えたら必ずこのテストを通すこと。通らなくなったら、テストを書き換えずに相談する。
  */
 import { describe, expect, it } from 'vitest';
-import { issueOrders, loadStage, PHASE_TICKS, runPhase, SUPPRESSION, type Orders, type StageData } from '../src/sim';
+import { issueOrders, loadStage, PHASE_TICKS, rect, runPhase, SUPPRESSION, type MapData, type Orders, type StageData } from '../src/sim';
 import stageData from '../stages/mvp.json';
 import {
   blue,
@@ -131,5 +131,33 @@ describe('設計目標4:決定性', () => {
     const before = JSON.stringify(s.units);
     runPhase(s);
     expect(JSON.stringify(s.units)).toBe(before);
+  });
+});
+
+describe('設計目標5:建物の中の班', () => {
+  // 家(14 m × 10 m)の中に敵の班。味方は南と東の石垣の内側(家から約 65〜70 m)
+  const town: MapData = {
+    width: 400,
+    height: 300,
+    features: [
+      { id: 'house', kind: 'building', enterable: true, poly: rect(200, 150, 14, 10) },
+      { id: 'wallS', kind: 'hard', poly: rect(200, 80, 12, 1) },
+      { id: 'wallE', kind: 'hard', poly: rect(280, 150, 1, 12) },
+    ],
+  };
+  const fight = (twoDirections: boolean) => {
+    const r = red('r1', { x: 200, y: 147 });
+    r.inBuilding = 'house';
+    const us = [r, blue('b1', { x: 200, y: 79 })];
+    if (twoDirections) us.push(blue('b2', { x: 281, y: 150 }, WEST));
+    return runUntil(scenario(us, town), seconds(30), (s) => !unit(s, 'r1').alive);
+  };
+
+  it('二方向から同時に攻めれば、30 秒以内に全滅させられる', () => {
+    expect(fight(true).ticks).not.toBeNull();
+  });
+
+  it('(比較)1方向からだけでは、30 秒たっても全滅しない', () => {
+    expect(fight(false).ticks).toBeNull();
   });
 });

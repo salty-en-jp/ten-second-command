@@ -1,5 +1,5 @@
 /** 右側のパネル:選んだ班への命令を入力する */
-import { MORTAR, SMOKE, SUPPRESSION, TICKS_PER_SECOND, type Orders, type SideVision, type Unit } from '../sim';
+import { BUILDING, MORTAR, SMOKE, SUPPRESSION, TICKS_PER_SECOND, type Orders, type SideVision, type Unit } from '../sim';
 import { label } from './orders';
 import { starText } from './storage';
 import type { Evaluation } from '../sim';
@@ -63,7 +63,11 @@ export function renderPanel(el: HTMLElement, p: PanelProps) {
       u.kind === 'sniper' && u.alive
         ? u.cooldownTicks > 0 ? `、装填中 あと${(u.cooldownTicks / TICKS_PER_SECOND).toFixed(1)}秒` : u.aimTargetId ? `、${label({ id: u.aimTargetId })}を狙っている` : ''
         : '';
-    return `<div class="hint">${label(u)}:耐久 ${Math.ceil(u.hp)}/${max}、制圧値 ${Math.round(u.suppression)}(${stateText(u)})${sniper}${mortar}${extra}</div>`;
+    const building =
+      !u.alive ? ''
+      : u.inBuilding !== null ? `、建物の中${u.buildingTicks > 0 ? `(出ている途中 あと${((BUILDING.exitSec * TICKS_PER_SECOND - u.buildingTicks) / TICKS_PER_SECOND).toFixed(1)}秒)` : ''}`
+      : u.buildingTicks > 0 ? '、建物に入っている途中' : '';
+    return `<div class="hint">${label(u)}:耐久 ${Math.ceil(u.hp)}/${max}、制圧値 ${Math.round(u.suppression)}(${stateText(u)})${building}${sniper}${mortar}${extra}</div>`;
   };
 
   let html = '';
@@ -99,7 +103,7 @@ export function renderPanel(el: HTMLElement, p: PanelProps) {
           ${u.kind === 'fireteam' && u.mountedIn === null ? btn('data-tool="smoke"', `発煙手榴弾(${u.smokeGrenades}個)`, p.tool === 'smoke') : ''}
         </div>
         <div class="hint">${
-          p.tool === 'route' ? '地図をクリックすると経路の点を足します。右クリックか「最後の点を消す」で取り消せます。'
+          p.tool === 'route' ? `地図をクリックすると経路の点を足します。右クリックか「最後の点を消す」で取り消せます。${u.kind === 'fireteam' || u.kind === 'sniper' ? '窓の点線がある建物をクリックすると、入口まで歩いて中に入ります。' : ''}`
           : p.tool === 'facing' ? (u.kind === 'sniper' ? '撃つ方向をクリックします。黄色い細い扇形(幅30°)の中に入った敵だけを撃ちます。' : '向かせたい方向をクリックします(経路の終点から)。')
           : p.tool === 'withdraw' ? '「離脱」のときに下がる経路をクリックで足します。右クリックで消します。'
           : p.tool === 'smoke' ? `煙を立てたい場所をクリックします(${SMOKE.grenade.throwRange} m まで。1回で1個)。投げて${SMOKE.grenade.delaySec}秒で半径${SMOKE.grenade.radius} mの煙が立ち、${SMOKE.grenade.durationSec}秒続きます。煙は視線をさえぎりますが、弾は通ります。自分たちも煙の向こうは見えません。右クリックで最後の1個を取り消し。`
@@ -137,6 +141,12 @@ export function renderPanel(el: HTMLElement, p: PanelProps) {
       <div class="group"><h3>発煙手榴弾(残り${u.smokeGrenades}個)</h3><ol class="wps">${(o.smokeThrows ?? [])
         .map((m, i) => `<li>${i + 1}個目<input type="number" min="0" max="10" step="1" value="${m.atSec}" data-smokeat="${i}" />秒に投げる <button data-delsmoke="${i}">消す</button></li>`)
         .join('')}</ol></div>` : ''}
+      ${o.enterId || u.inBuilding !== null ? `
+      <div class="group"><h3>建物</h3>
+        ${o.enterId && o.enterId !== u.inBuilding ? `<div class="hint">経路の終点から建物に入ります(入口に着いて${BUILDING.enterSec}秒)。敵がいれば突入します(${BUILDING.assaultSec}秒。その間は外で無防備。入った瞬間に手榴弾で中の敵に被害)。</div>
+        <div class="row"><button data-act="noEnter">入るのをやめる</button></div>` : ''}
+        ${u.inBuilding !== null ? `<div class="hint">建物の中にいます。向いている方向(±60°)からの射撃は×0.2、横・後ろからは×0.5。見つかりにくい(発見距離が半分)。経路を出すと${BUILDING.exitSec}秒で外に出ます。</div>` : ''}
+      </div>` : ''}
       <div class="group"><h3>経路(点ごとの待機秒数)</h3>
         ${o.route.length === 0 ? '<div class="hint">経路なし(その場にとどまる)</div>' : `<ol class="wps">${o.route
           .map((w, i) => `<li>点${i + 1}<input type="number" min="0" max="10" step="1" value="${w.waitSec}" data-wait="${i}" />秒待つ</li>`)
@@ -178,6 +188,7 @@ export function renderPanel(el: HTMLElement, p: PanelProps) {
         <i style="background:#8a6438"></i>軟らかい遮蔽(木柵):正面から±60°の射撃を×0.5。弾は通る
         <i style="background:rgba(52,110,46,.8)"></i>茂み・果樹林:中にいると、半分の距離まで近づかれないと見つからない
         <i style="background:#5b3d34"></i>建物:入れない。弾をさえぎる
+        <i style="background:#8a5d48;outline:1px dashed #ffe6b4;outline-offset:-3px"></i>窓の点線がある建物:射撃班と狙撃手が入れる(1軒に1班)。中は向いている方向から×0.2、横・後ろから×0.5。IFV の機関砲で12秒撃たれると突破口が開き(オレンジの破線)、どこからでも×0.5
         <i style="background:#5aa9ff;border-radius:1px"></i>長方形=IFV(三角が車体の前、線が砲身)。小銃は効かない。IFV の機関砲で撃たれ続けた石垣・土塁は崩れて瓦礫(軟らかい遮蔽)になる
         <i style="background:#ffb36b"></i>オレンジの小さな四角=対戦車火器を持っている班
         <i style="background:#e6e6e1;border-radius:50%"></i>煙:視線をさえぎる(弾は通る)。中にいると外が見えず、外からも見えない
@@ -201,7 +212,14 @@ export function renderPanel(el: HTMLElement, p: PanelProps) {
       f(b);
       p.onChange();
     }));
-  on('[data-act=undoPoint]', () => (p.tool === 'withdraw' ? o.withdrawRoute.pop() : o.route.pop()));
+  on('[data-act=undoPoint]', () => {
+    if (p.tool === 'withdraw') o.withdrawRoute.pop();
+    else {
+      o.route.pop();
+      o.enterId = null;
+    }
+  });
+  on('[data-act=noEnter]', () => (o.enterId = null));
   on('[data-deploy]', (b) => (o.deploy = b.dataset.deploy === '1'));
   on('[data-dismount]', (b) => (o.dismount = b.dataset.dismount === '1'));
   on('[data-mount]', (b) => (o.mountId = b.dataset.mount || null));
@@ -229,7 +247,10 @@ export function renderPanel(el: HTMLElement, p: PanelProps) {
       p.onChange();
     }),
   );
-  on('[data-act=clearRoute]', () => (o.route = []));
+  on('[data-act=clearRoute]', () => {
+    o.route = [];
+    o.enterId = null;
+  });
   on('[data-act=clearWithdraw]', () => (o.withdrawRoute = []));
   on('[data-facing=auto]', () => (o.facing = null));
   on('[data-fire]', (b) => (o.fire = b.dataset.fire as Orders['fire']));

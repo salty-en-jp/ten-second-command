@@ -9,6 +9,7 @@ import { DEG, PHASE_TICKS, TICKS_PER_SECOND } from './config';
 import { angleTo, dist } from './geometry';
 import { issueOrders } from './step';
 import { effectiveCover, lineOfFire } from './terrain';
+import { approachPoint, buildingAt } from './building';
 import type { AiMemory, Orders, Side, SimState, Unit, Vec2 } from './types';
 
 export type Personality = 'ambush' | 'assault' | 'defense';
@@ -30,7 +31,7 @@ export interface AiPlan {
   advanceRoutes?: Record<string, Vec2[]>;
   /** 回り込み点(突撃型の回り込み、防御型の反撃) */
   flankPoints?: Vec2[];
-  /** 待ち伏せ型の射撃開始線(m) */
+  /** 射撃開始線(m)。待ち伏せ型(省略時 60 m)と防御型(省略時は使わない) */
   openFireRange?: number;
 }
 
@@ -71,6 +72,23 @@ const O = (o: Partial<Orders>): Orders => ({
   ...o,
 });
 const wp = (p: Vec2) => ({ pos: { x: p.x, y: p.y }, waitSec: 0 });
+/** 陣地へ向かう経路。陣地が入れる建物の中なら、入口まで歩いて入る */
+function goTo(state: SimState, u: Unit, p: Vec2): Pick<Orders, 'route' | 'enterId'> {
+  const b = buildingAt(state.map, p);
+  if (!b) return { route: [wp(p)], enterId: null };
+  if (u.inBuilding === b.id) return { route: [], enterId: b.id };
+  return { route: [wp(approachPoint(b, u.pos))], enterId: b.id };
+}
+/** 下がる経路(離脱方針の後退経路にもする) */
+function fallBack(state: SimState, u: Unit, p: Vec2): Pick<Orders, 'route' | 'enterId' | 'withdrawRoute'> {
+  const g = goTo(state, u, p);
+  return { ...g, withdrawRoute: g.route.map((w) => ({ ...w.pos })) };
+}
+/** 陣地に着いているか(建物の陣地なら、その建物の中にいるか) */
+function atPos(state: SimState, u: Unit, p: Vec2): boolean {
+  const b = buildingAt(state.map, p);
+  return b ? u.inBuilding === b.id : dist(u.pos, p) < 2;
+}
 const posOf = (p: AiPosition): Vec2 => ({ x: p.x, y: p.y });
 const byDistThenId = (from: Vec2) => (a: { id: string; pos: Vec2 }, b: { id: string; pos: Vec2 }) =>
   dist(from, a.pos) - dist(from, b.pos) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
@@ -152,8 +170,7 @@ function ambush(state: SimState, plan: AiPlan, mem: AiMemory, us: Unit[], threat
           ? [{ target: { x: u.pos.x + ((near.pos.x - u.pos.x) / Math.max(1, dist(u.pos, near.pos))) * 15, y: u.pos.y + ((near.pos.y - u.pos.y) / Math.max(1, dist(u.pos, near.pos))) * 15 }, atSec: 0 }]
           : [];
       out[u.id] = O({
-        route: [wp(posOf(next))],
-        withdrawRoute: [posOf(next)],
+        ...fallBack(state, u, posOf(next)),
         policy: 'withdraw',
         fire: 'hold',
         openFireRange: range,
@@ -163,10 +180,10 @@ function ambush(state: SimState, plan: AiPlan, mem: AiMemory, us: Unit[], threat
       continue;
     }
     // とどまる:まだ誰も撃っていなければ待ち伏せを続け、撃ち合いが始まっていれば撃つ
-    const atPost = !here || dist(u.pos, posOf(here)) < 2;
+    const atPost = !here || atPos(state, u, posOf(here));
     const quiet = !near || dist(u.pos, near.pos) > range;
     out[u.id] = O({
-      route: here && !atPost ? [wp(posOf(here))] : [],
+      ...(here && !atPost ? goTo(state, u, posOf(here)) : { route: [], enterId: here && buildingAt(state.map, posOf(here)) ? u.inBuilding : null }),
       fire: quiet && (mem.firstFireTick === null || !near) ? 'hold' : 'free',
       openFireRange: range,
       policy: 'hold',
@@ -249,7 +266,7 @@ function defense(state: SimState, plan: AiPlan, mem: AiMemory, us: Unit[], threa
     if (u.hp <= AI.defenseRetreatHp && list.length > 1 && idx !== list.length - 1) {
       mem.posIndex[u.id] = list.length - 1;
       const last = list[list.length - 1]!;
-      out[u.id] = O({ route: [wp(posOf(last))], withdrawRoute: [posOf(last)], policy: 'withdraw', fire: 'free', facing: last.facingDeg * DEG });
+      out[u.id] = O({ ...fallBack(state, u, posOf(last)), policy: 'withdraw', fire: 'free', facing: last.facingDeg * DEG });
       continue;
     }
     if (near && effectiveCover(state.map, u.pos, near.pos) === null) {
@@ -258,17 +275,19 @@ function defense(state: SimState, plan: AiPlan, mem: AiMemory, us: Unit[], threa
       );
       if (j >= 0) {
         mem.posIndex[u.id] = j;
-        out[u.id] = O({ route: [wp(posOf(list[j]!))], policy: 'advance', fire: 'free', facing: angleTo(posOf(list[j]!), near.pos) });
+        out[u.id] = O({ ...goTo(state, u, posOf(list[j]!)), policy: 'advance', fire: 'free', facing: angleTo(posOf(list[j]!), near.pos) });
       } else {
         out[u.id] = O({ policy: 'hold', fire: 'free', facing: angleTo(u.pos, near.pos) });
       }
       continue;
     }
-    const atPost = !here || dist(u.pos, posOf(here)) < 2;
+    const atPost = !here || atPos(state, u, posOf(here));
     out[u.id] = O({
-      route: here && !atPost ? [wp(posOf(here))] : [],
+      ...(here && !atPost ? goTo(state, u, posOf(here)) : { route: [], enterId: u.inBuilding }),
       policy: 'hold',
-      fire: 'free',
+      // 射撃開始線(ステージで指定したとき):だれかが撃ち始めるまでは、敵が近づくまで撃たない
+      fire: plan.openFireRange && mem.firstFireTick === null ? 'hold' : 'free',
+      openFireRange: plan.openFireRange ?? null,
       facing: near ? angleTo(u.pos, near.pos) : here ? here.facingDeg * DEG : null,
     });
   }

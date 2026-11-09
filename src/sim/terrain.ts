@@ -23,6 +23,9 @@ export function protects(p: Vec2, f: TerrainFeature, from: Vec2): boolean {
 
 /** p にいる者が from から撃たれたとき、効いている一番強い遮蔽。なければ null */
 export function effectiveCover(map: MapData, p: Vec2, from: Vec2): CoverKind | null {
+  // 入れる建物の中:外からの射撃には硬い遮蔽として効く(向きによる違いは被ダメージの計算で扱う)。同じ建物の中からは効かない
+  const b = map.features.find((f) => f.kind === 'building' && f.enterable && pointInPolygon(p, f.poly));
+  if (b) return pointInPolygon(from, b.poly) ? null : 'hard';
   let best: CoverKind | null = null;
   for (const f of map.features) {
     if (f.kind !== 'hard' && f.kind !== 'soft') continue;
@@ -40,6 +43,8 @@ export function effectiveCover(map: MapData, p: Vec2, from: Vec2): CoverKind | n
 export function lineOfFire(map: MapData, a: Vec2, b: Vec2): boolean {
   for (const f of map.features) {
     if (f.kind === 'building') {
+      // 入れる建物の中にいる者は、窓・射撃孔から見て撃てる(その建物はさえぎらない)
+      if (f.enterable && (pointInPolygon(a, f.poly) || pointInPolygon(b, f.poly))) continue;
       if (segmentHitsPolygon(a, b, f.poly)) return false;
     } else if (f.kind === 'hard') {
       if (occupies(a, f) || occupies(b, f)) continue;
@@ -59,7 +64,7 @@ export function insideConcealment(map: MapData, p: Vec2): boolean {
   return map.features.some((f) => f.kind === 'concealment' && pointInPolygon(p, f.poly));
 }
 
-/** 建物の中か(進入不可) */
+/** 建物の中か(入れる建物も含む) */
 export function insideBuilding(map: MapData, p: Vec2): boolean {
   return map.features.some((f) => f.kind === 'building' && pointInPolygon(p, f.poly));
 }

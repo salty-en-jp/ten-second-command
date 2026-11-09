@@ -18,6 +18,8 @@ import {
   WARNING_TICKS,
   dist,
   angleTo,
+  approachPoint,
+  buildingAt,
   type Orders,
   type SimState,
   type StageData,
@@ -248,7 +250,19 @@ export class App {
       const last = ms.at(-1);
       ms.push({ target: clamped, atSec: last ? Math.min(10, last.atSec + 2) : 0 });
       o.deploy = true; // 撃つには展開が必要なので、射撃を命じたら自動で展開する
-    } else if (this.tool === 'route') o.route.push({ pos: clamped, waitSec: 0 });
+    } else if (this.tool === 'route') {
+      // 入れる建物をクリック:入口まで歩いて入る(射撃班とスナイパー)
+      const b = (u.kind === 'fireteam' || u.kind === 'sniper') && u.mountedIn === null ? buildingAt(this.view.map, clamped) : null;
+      const from = o.route.at(-1)?.pos ?? u.pos;
+      if (b && u.inBuilding === b.id && o.route.length === 0) o.enterId = b.id;
+      else if (b) {
+        o.route.push({ pos: approachPoint(b, from), waitSec: 0 });
+        o.enterId = b.id;
+      } else {
+        o.route.push({ pos: clamped, waitSec: 0 });
+        o.enterId = null; // 入ったあとに経路を足したら、入るのをやめる
+      }
+    }
     else if (this.tool === 'withdraw') o.withdrawRoute.push(clamped);
     else if (this.tool === 'facing') {
       const from = o.route.at(-1)?.pos ?? u.pos;
@@ -265,7 +279,10 @@ export class App {
     if (this.tool === 'smoke') o.smokeThrows?.pop();
     else if (this.tool === 'mortar') o.fireMissions?.pop();
     else if (this.tool === 'withdraw') o.withdrawRoute.pop();
-    else o.route.pop();
+    else {
+      o.route.pop();
+      o.enterId = null;
+    }
     this.changed();
   }
 

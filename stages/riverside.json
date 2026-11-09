@@ -1,0 +1,246 @@
+{
+  "id": "riverside",
+  "name": "川沿いの村(建物)",
+  "description": "川沿いの石造りの村。敵の射撃班2つが家にこもり、1班が家の間の石垣を守っている。家の中の敵は見つけにくく、正面から撃ってもなかなか崩れない。家には対戦車火器もある。果樹園や生け垣に隠れて空き家に入り、IFV は遠くから支えよう。",
+  "par": 11,
+  "width": 300,
+  "height": 200,
+  "features": [
+    {
+      "id": "reeds",
+      "kind": "concealment",
+      "note": "川岸の葦",
+      "rect": {
+        "cx": 150,
+        "cy": 196,
+        "w": 300,
+        "h": 8
+      }
+    },
+    {
+      "id": "orchard",
+      "kind": "concealment",
+      "note": "西の果樹園",
+      "rect": {
+        "cx": 40,
+        "cy": 44,
+        "w": 44,
+        "h": 68
+      }
+    },
+    {
+      "id": "hedgeE",
+      "kind": "concealment",
+      "note": "東の生け垣",
+      "rect": {
+        "cx": 278,
+        "cy": 50,
+        "w": 4,
+        "h": 70
+      }
+    },
+    {
+      "id": "ditch",
+      "kind": "hard",
+      "note": "村の手前の土手(IFV が車体を隠せる)",
+      "rect": {
+        "cx": 150,
+        "cy": 95,
+        "w": 40,
+        "h": 1.5
+      }
+    },
+    {
+      "id": "houseW",
+      "kind": "building",
+      "enterable": true,
+      "note": "西の家(敵)",
+      "rect": {
+        "cx": 75,
+        "cy": 118,
+        "w": 14,
+        "h": 10
+      }
+    },
+    {
+      "id": "houseE",
+      "kind": "building",
+      "enterable": true,
+      "note": "東の家(敵)",
+      "rect": {
+        "cx": 225,
+        "cy": 122,
+        "w": 14,
+        "h": 10
+      }
+    },
+    {
+      "id": "houseSW",
+      "kind": "building",
+      "enterable": true,
+      "note": "南西の空き家",
+      "rect": {
+        "cx": 38,
+        "cy": 86,
+        "w": 12,
+        "h": 10
+      }
+    },
+    {
+      "id": "houseSE",
+      "kind": "building",
+      "enterable": true,
+      "note": "南東の空き家",
+      "rect": {
+        "cx": 262,
+        "cy": 90,
+        "w": 12,
+        "h": 10
+      }
+    },
+    {
+      "id": "wallC",
+      "kind": "hard",
+      "note": "家の間の石垣",
+      "rect": {
+        "cx": 150,
+        "cy": 140,
+        "w": 24,
+        "h": 1
+      }
+    },
+    {
+      "id": "barn",
+      "kind": "building",
+      "note": "納屋",
+      "rect": {
+        "cx": 150,
+        "cy": 182,
+        "w": 20,
+        "h": 10
+      }
+    },
+    {
+      "id": "mill",
+      "kind": "building",
+      "note": "水車小屋",
+      "rect": {
+        "cx": 230,
+        "cy": 183,
+        "w": 12,
+        "h": 10
+      }
+    }
+  ],
+  "units": [
+    {
+      "id": "b1",
+      "name": "第1班",
+      "side": "blue",
+      "x": 90,
+      "y": 10,
+      "facingDeg": 90
+    },
+    {
+      "id": "b2",
+      "name": "第2班",
+      "side": "blue",
+      "x": 210,
+      "y": 10,
+      "facingDeg": 90
+    },
+    {
+      "id": "v1",
+      "name": "IFV",
+      "kind": "ifv",
+      "side": "blue",
+      "x": 150,
+      "y": 8,
+      "facingDeg": 90
+    },
+    {
+      "id": "b3",
+      "name": "第3班",
+      "side": "blue",
+      "x": 150,
+      "y": 8,
+      "facingDeg": 90,
+      "mountedIn": "v1",
+      "at": 1
+    },
+    {
+      "id": "m1",
+      "name": "迫撃砲班",
+      "kind": "mortar",
+      "side": "blue",
+      "x": 150,
+      "y": 3,
+      "facingDeg": 90
+    },
+    {
+      "id": "r1",
+      "name": "敵A",
+      "side": "red",
+      "x": 75,
+      "y": 115,
+      "facingDeg": -60,
+      "at": 1
+    },
+    {
+      "id": "r2",
+      "name": "敵B",
+      "side": "red",
+      "x": 225,
+      "y": 119,
+      "facingDeg": -120,
+      "at": 1
+    },
+    {
+      "id": "r3",
+      "name": "敵C",
+      "side": "red",
+      "x": 150,
+      "y": 141,
+      "facingDeg": -90,
+      "at": 1
+    }
+  ],
+  "ai": {
+    "personality": "defense",
+    "side": "red",
+    "positions": {
+      "r1": [
+        {
+          "x": 75,
+          "y": 115,
+          "facingDeg": -60
+        }
+      ],
+      "r2": [
+        {
+          "x": 225,
+          "y": 119,
+          "facingDeg": -120
+        }
+      ],
+      "r3": [
+        {
+          "x": 150,
+          "y": 141,
+          "facingDeg": -90
+        },
+        {
+          "x": 150,
+          "y": 139,
+          "facingDeg": 90
+        }
+      ]
+    },
+    "openFireRange": 80
+  },
+  "aiLabel": {
+    "name": "防御型",
+    "description": "家と石垣から動かない。敵が 80 m に近づくまで撃たずに待つ。家の中の班は、撃ってきた方へ向き直る。",
+    "hint": "二方向から同時に"
+  }
+}

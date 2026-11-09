@@ -4,7 +4,7 @@
  * - 射撃は「着弾位置」と「フェイズ内の発射時刻」で命令する。発射から着弾まで4秒
  * - 着弾を味方が見ていれば、その付近への次の射撃は正確。見ていなければ遠くへずれる
  */
-import { MORTAR, TICKS_PER_SECOND } from './config';
+import { BUILDING, MORTAR, TICKS_PER_SECOND } from './config';
 import { dist } from './geometry';
 import { lineOfFire, occupies } from './terrain';
 import { unitStats } from './config';
@@ -118,6 +118,11 @@ export function inAnyCover(map: MapData, p: Vec2): boolean {
 export function blastEffect(map: MapData, target: Unit, at: Vec2): { damage: number; suppression: number } | null {
   const d = dist(target.pos, at);
   if (d > MORTAR.suppressRadius) return null;
+  // 建物の中:迫撃砲はほとんどの屋根を抜けない(FM 90-10-1 8-9)。制圧値はそのまま
+  if (target.inBuilding !== null) {
+    const damage = d < MORTAR.lethalRadius ? MORTAR.centerDamage * (1 - d / MORTAR.lethalRadius) * BUILDING.mortarFactor : 0;
+    return { damage, suppression: MORTAR.suppression };
+  }
   const cover = inAnyCover(map, target.pos);
   const f = cover ? MORTAR.coverFactor : target.prone ? MORTAR.proneFactor : 1;
   const damage = d < MORTAR.lethalRadius ? MORTAR.centerDamage * (1 - d / MORTAR.lethalRadius) * f : 0;

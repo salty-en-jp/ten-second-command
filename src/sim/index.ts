@@ -12,3 +12,4 @@ export * from './ai';
 export * from './evaluate';
 export * from './deploy';
 export * from './smoke';
+export * from './building';
