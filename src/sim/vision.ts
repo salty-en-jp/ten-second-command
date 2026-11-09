@@ -1,16 +1,16 @@
 /**
  * 視界(フォグ・オブ・ウォー)。design.md 4.1
  */
-import { FIRETEAM, TICKS_PER_SECOND, VISION } from './config';
+import { TICKS_PER_SECOND, unitStats, VISION } from './config';
 import { angleDiff, angleTo, dist } from './geometry';
 import { insideConcealment, lineOfFire } from './terrain';
 import type { MapData, Side, SideVision, SimState, Unit } from './types';
 
 const EXPOSURE_TICKS = Math.round(VISION.fireExposureSec * TICKS_PER_SECOND);
 
-/** target を発見できる距離(視界距離に、茂みと発砲による暴露の倍率をかける) */
-export function detectionRange(map: MapData, target: Unit): number {
-  let r = FIRETEAM.sightRange;
+/** viewer が target を発見できる距離(viewer の視界距離に、茂みと発砲による暴露の倍率をかける) */
+export function detectionRange(map: MapData, viewer: Unit, target: Unit): number {
+  let r = unitStats(viewer.kind).sightRange;
   if (insideConcealment(map, target.pos)) r *= VISION.concealmentFactor;
   if (target.ticksSinceFired < EXPOSURE_TICKS) r *= VISION.fireExposureFactor;
   return r;
@@ -22,8 +22,8 @@ export function detectionRange(map: MapData, target: Unit): number {
  */
 export function sees(map: MapData, viewer: Unit, target: Unit): boolean {
   if (!viewer.alive || !target.alive) return false;
-  if (dist(viewer.pos, target.pos) > detectionRange(map, target)) return false;
-  if (angleDiff(viewer.facing, angleTo(viewer.pos, target.pos)) > FIRETEAM.sightArc / 2) return false;
+  if (dist(viewer.pos, target.pos) > detectionRange(map, viewer, target)) return false;
+  if (angleDiff(viewer.facing, angleTo(viewer.pos, target.pos)) > unitStats(viewer.kind).sightArc / 2) return false;
   return lineOfFire(map, viewer.pos, target.pos);
 }
 

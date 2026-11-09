@@ -1,12 +1,15 @@
 import { DEG } from './config';
 import { rect } from './geometry';
-import { defaultOrders, makeFireteam } from './units';
-import type { MapData, Orders, Side, SimState, TerrainFeature, TerrainKind, Vec2 } from './types';
+import { defaultOrders, makeUnit } from './units';
+import type { MapData, Orders, Side, SimState, TerrainFeature, TerrainKind, UnitKind, Vec2 } from './types';
 import { createState } from './step';
 
 /** ステージ JSON の形。角度は度数で書く */
 export interface StageData {
+  id?: string;
   name: string;
+  /** ミッション選択画面に出す説明 */
+  description?: string;
   width: number;
   height: number;
   features: Array<{
@@ -18,6 +21,10 @@ export interface StageData {
   }>;
   units: Array<{
     id: string;
+    /** 画面に出す名前(例:第1班) */
+    name?: string;
+    /** 兵科(省略時は射撃班) */
+    kind?: UnitKind;
     side: Side;
     x: number;
     y: number;
@@ -42,7 +49,7 @@ export function loadStage(data: StageData): SimState {
       ...rest,
       facing: facingDeg === undefined || facingDeg === null ? null : facingDeg * DEG,
     };
-    return makeFireteam(u.id, u.side, { x: u.x, y: u.y }, u.facingDeg * DEG, orders);
+    return makeUnit(u.kind ?? 'fireteam', u.id, u.side, { x: u.x, y: u.y }, u.facingDeg * DEG, orders);
   });
   return createState(map, units);
 }

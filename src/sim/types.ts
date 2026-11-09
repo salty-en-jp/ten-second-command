@@ -5,6 +5,9 @@ export interface Vec2 {
 
 export type Side = 'blue' | 'red';
 
+/** 兵科 */
+export type UnitKind = 'fireteam' | 'sniper';
+
 /** design.md 4.2 の地形の種類(開けた地面は「何もない場所」として扱う) */
 export type TerrainKind = 'hard' | 'soft' | 'concealment' | 'building';
 
@@ -62,6 +65,7 @@ export type Activity = 'route' | 'reacting' | 'seekingCover' | 'engaged' | 'adva
 export interface Unit {
   id: string;
   side: Side;
+  kind: UnitKind;
   pos: Vec2;
   facing: number;
   hp: number;
@@ -101,6 +105,17 @@ export interface Unit {
   shot: Shot | null;
   /** 最後に発砲してからのティック数(発砲による暴露に使う) */
   ticksSinceFired: number;
+  /** 最後にこちらを撃ってきた敵の id */
+  lastShooterId: string | null;
+
+  // ---- スナイパー用
+  /** 次を撃てるまでの残りティック */
+  cooldownTicks: number;
+  /** 狙っている敵と、狙い始めてからのティック数 */
+  aimTargetId: string | null;
+  aimTicks: number;
+  /** 最後に撃ったティックと着弾点(描画用) */
+  lastFire: { tick: number; point: Vec2 } | null;
 }
 
 export interface Shot {

@@ -21,6 +21,7 @@ import {
   drawDeployZone,
   drawLastSeen,
   drawUnseenFire,
+  drawTracers,
   drawOrders,
   drawShots,
   drawTerrain,
@@ -29,7 +30,7 @@ import {
   toWorld,
   type View,
 } from '../render/draw';
-import { draftsFor, label } from './orders';
+import { draftsFor, label, setLabels } from './orders';
 import { renderPanel, type Tool } from './panel';
 
 type Mode = 'planning' | 'executing' | 'over';
@@ -62,6 +63,8 @@ export class App {
     stage: StageData,
   ) {
     this.stage = stage;
+    setLabels(stage.units);
+    canvas.style.aspectRatio = `${stage.width} / ${stage.height}`;
     this.initial = loadStage(stage);
     this.current = this.initial;
     this.drafts = draftsFor(this.current);
@@ -257,11 +260,15 @@ export class App {
         if (vis.has(id)) continue;
         drawLastSeen(v, 'red', ls.pos, (frame.tick - ls.tick) / TICKS_PER_SECOND, label({ id }));
       }
-      // 視界の外からの射撃は、おおまかな方向だけ示す
+      // 視界の外からの射撃は、おおまかな方向だけ示す(スナイパーの1発は1秒間)
       for (const e of units) {
-        if (e.side !== 'red' || shown(e) || !e.shot?.targetId) continue;
-        const t = units.find((x) => x.id === e.shot!.targetId);
-        if (t) drawUnseenFire(v, t.pos, e.pos);
+        if (e.side !== 'red' || shown(e)) continue;
+        if (e.shot?.targetId) {
+          const t = units.find((x) => x.id === e.shot!.targetId);
+          if (t) drawUnseenFire(v, t.pos, e.pos);
+        } else if (e.kind === 'sniper' && e.lastFire && frame.tick - e.lastFire.tick <= TICKS_PER_SECOND) {
+          drawUnseenFire(v, e.lastFire.point, e.pos);
+        }
       }
     }
 
@@ -278,11 +285,14 @@ export class App {
       }
     }
     drawShots(v, units.filter(shown));
+    drawTracers(v, units.filter(shown), frame.tick);
     for (const u of units) {
       if (!shown(u)) continue;
       drawUnit(v, u, {
         selected: this.mode === 'planning' && u.id === this.selected,
         label: label(u),
+        showArc: u.alive && (u.side === 'red' || u.id === this.selected || this.mode === 'executing'),
+        arcCenter: this.mode === 'planning' ? (this.drafts[u.id]?.facing ?? undefined) : undefined,
         showSight:
           u.alive &&
           (this.showSight === 'all' ||
