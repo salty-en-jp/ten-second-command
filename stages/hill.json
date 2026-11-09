@@ -1,0 +1,231 @@
+{
+  "id": "hill",
+  "name": "丘の裏の砲座(迫撃砲)",
+  "description": "牧草地の向こうの土塁に、敵の射撃班が2つこもっている。こちらには尾根の裏に迫撃砲が1門。生け垣から着弾を見届ければ、迫撃砲は正確になる。",
+  "width": 300,
+  "height": 200,
+  "features": [
+    {
+      "id": "ridgeW",
+      "kind": "hard",
+      "note": "味方側の尾根の土手(西)。裏側は敵から見えない",
+      "rect": {
+        "cx": 60,
+        "cy": 45,
+        "w": 64,
+        "h": 3
+      }
+    },
+    {
+      "id": "ridgeC",
+      "kind": "hard",
+      "note": "尾根の土手(中央)。迫撃砲の陰",
+      "rect": {
+        "cx": 150,
+        "cy": 45,
+        "w": 104,
+        "h": 3
+      }
+    },
+    {
+      "id": "ridgeE",
+      "kind": "hard",
+      "note": "尾根の土手(東)",
+      "rect": {
+        "cx": 239,
+        "cy": 45,
+        "w": 62,
+        "h": 3
+      }
+    },
+    {
+      "id": "hedgeWv",
+      "kind": "concealment",
+      "note": "西の生け垣(南北)。中を進めば見つかりにくい。土手の切れ目から続く",
+      "rect": {
+        "cx": 95,
+        "cy": 56,
+        "w": 4,
+        "h": 62
+      }
+    },
+    {
+      "id": "hedgeWh",
+      "kind": "concealment",
+      "note": "西の生け垣(東西)。観測の位置",
+      "rect": {
+        "cx": 95,
+        "cy": 86,
+        "w": 40,
+        "h": 4
+      }
+    },
+    {
+      "id": "hedgeEv",
+      "kind": "concealment",
+      "note": "東の生け垣(南北)。土手の切れ目から続く",
+      "rect": {
+        "cx": 205,
+        "cy": 56,
+        "w": 4,
+        "h": 62
+      }
+    },
+    {
+      "id": "hedgeEh",
+      "kind": "concealment",
+      "note": "東の生け垣(東西)",
+      "rect": {
+        "cx": 205,
+        "cy": 86,
+        "w": 40,
+        "h": 4
+      }
+    },
+    {
+      "id": "wreckW",
+      "kind": "soft",
+      "note": "車両の残骸。前進の足場",
+      "rect": {
+        "cx": 130,
+        "cy": 115,
+        "w": 6,
+        "h": 3
+      }
+    },
+    {
+      "id": "wreckE",
+      "kind": "soft",
+      "note": "車両の残骸",
+      "rect": {
+        "cx": 172,
+        "cy": 120,
+        "w": 6,
+        "h": 3
+      }
+    },
+    {
+      "id": "earthW",
+      "kind": "hard",
+      "note": "敵の土塁(西)",
+      "rect": {
+        "cx": 115,
+        "cy": 150,
+        "w": 40,
+        "h": 2
+      }
+    },
+    {
+      "id": "earthE",
+      "kind": "hard",
+      "note": "敵の土塁(東)",
+      "rect": {
+        "cx": 190,
+        "cy": 150,
+        "w": 40,
+        "h": 2
+      }
+    },
+    {
+      "id": "houseW1",
+      "kind": "building",
+      "note": "西の家並み。回り込みを長くする",
+      "rect": {
+        "cx": 25,
+        "cy": 115,
+        "w": 14,
+        "h": 30
+      }
+    },
+    {
+      "id": "houseW2",
+      "kind": "building",
+      "note": "西の家並み",
+      "rect": {
+        "cx": 25,
+        "cy": 160,
+        "w": 14,
+        "h": 30
+      }
+    },
+    {
+      "id": "houseE",
+      "kind": "building",
+      "note": "東の倉庫",
+      "rect": {
+        "cx": 275,
+        "cy": 140,
+        "w": 14,
+        "h": 40
+      }
+    },
+    {
+      "id": "farm",
+      "kind": "building",
+      "note": "農家",
+      "rect": {
+        "cx": 150,
+        "cy": 182,
+        "w": 20,
+        "h": 10
+      }
+    }
+  ],
+  "units": [
+    {
+      "id": "m1",
+      "name": "迫撃砲班",
+      "kind": "mortar",
+      "side": "blue",
+      "x": 150,
+      "y": 30,
+      "facingDeg": 90
+    },
+    {
+      "id": "b1",
+      "name": "第1班",
+      "side": "blue",
+      "x": 75,
+      "y": 32,
+      "facingDeg": 90
+    },
+    {
+      "id": "b2",
+      "name": "第2班",
+      "side": "blue",
+      "x": 225,
+      "y": 32,
+      "facingDeg": 90
+    },
+    {
+      "id": "r1",
+      "name": "敵A",
+      "side": "red",
+      "x": 115,
+      "y": 152.2,
+      "facingDeg": -90,
+      "orders": {
+        "fire": "free",
+        "policy": "hold"
+      }
+    },
+    {
+      "id": "r2",
+      "name": "敵B",
+      "side": "red",
+      "x": 190,
+      "y": 152.2,
+      "facingDeg": -90,
+      "orders": {
+        "fire": "free",
+        "policy": "hold"
+      }
+    }
+  ],
+  "deployZone": {
+    "x": 30,
+    "y": 5,
+    "w": 240,
+    "h": 37
+  }
+}

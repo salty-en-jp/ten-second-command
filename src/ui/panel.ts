@@ -1,8 +1,8 @@
 /** 右側のパネル:選んだ班への命令を入力する */
-import { SUPPRESSION, TICKS_PER_SECOND, type Orders, type SideVision, type Unit } from '../sim';
+import { MORTAR, SUPPRESSION, TICKS_PER_SECOND, type Orders, type SideVision, type Unit } from '../sim';
 import { label } from './orders';
 
-export type Tool = 'route' | 'withdraw' | 'facing' | 'focus';
+export type Tool = 'route' | 'withdraw' | 'facing' | 'focus' | 'mortar';
 
 interface PanelProps {
   vision: SideVision;
@@ -40,12 +40,17 @@ export function renderPanel(el: HTMLElement, p: PanelProps) {
       const ls = p.vision.lastSeen[u.id];
       return `<div class="hint">${label(u)}:見えていない${ls ? `(最終確認 ${((p.tick - ls.tick) / TICKS_PER_SECOND).toFixed(0)}秒前)` : '(まだ見つけていない)'}</div>`;
     }
-    const max = u.kind === 'sniper' ? 25 : 100;
+    const max = u.kind === 'sniper' ? 25 : u.kind === 'mortar' ? MORTAR.maxHp : 100;
+    const mortarState = { packed: '収納(移動できる)', deploying: '展開中', deployed: '展開済(撃てる)', packing: '撤収中' };
+    const mortar =
+      u.kind === 'mortar' && u.alive
+        ? `、${mortarState[u.mortarState]}${u.mortarTicks > 0 ? ` あと${(u.mortarTicks / TICKS_PER_SECOND).toFixed(1)}秒` : ''}、残弾 ${u.rounds}/${MORTAR.rounds}`
+        : '';
     const sniper =
       u.kind === 'sniper' && u.alive
         ? u.cooldownTicks > 0 ? `、装填中 あと${(u.cooldownTicks / TICKS_PER_SECOND).toFixed(1)}秒` : u.aimTargetId ? `、${label({ id: u.aimTargetId })}を狙っている` : ''
         : '';
-    return `<div class="hint">${label(u)}:耐久 ${Math.ceil(u.hp)}/${max}、制圧値 ${Math.round(u.suppression)}(${stateText(u)})${sniper}</div>`;
+    return `<div class="hint">${label(u)}:耐久 ${Math.ceil(u.hp)}/${max}、制圧値 ${Math.round(u.suppression)}(${stateText(u)})${sniper}${mortar}</div>`;
   };
 
   let html = '';
@@ -67,14 +72,24 @@ export function renderPanel(el: HTMLElement, p: PanelProps) {
           ${btn('data-tool="facing"', u.kind === 'sniper' ? '射界(向き)' : '向き', p.tool === 'facing')}
           ${btn('data-tool="withdraw"', '離脱経路', p.tool === 'withdraw')}
           ${btn('data-tool="focus"', '撃つ敵を指定', p.tool === 'focus')}
+          ${u.kind === 'mortar' ? btn('data-tool="mortar"', '迫撃砲の射撃', p.tool === 'mortar') : ''}
         </div>
         <div class="hint">${
           p.tool === 'route' ? '地図をクリックすると経路の点を足します。右クリックか「最後の点を消す」で取り消せます。'
           : p.tool === 'facing' ? (u.kind === 'sniper' ? '撃つ方向をクリックします。黄色い細い扇形(幅30°)の中に入った敵だけを撃ちます。' : '向かせたい方向をクリックします(経路の終点から)。')
           : p.tool === 'withdraw' ? '「離脱」のときに下がる経路をクリックで足します。右クリックで消します。'
+          : p.tool === 'mortar' ? `着弾させたい場所をクリックします(1回で1発、2秒おき)。射程は${MORTAR.minRange}〜${MORTAR.maxRange} m、発射から${MORTAR.flightSec}秒で着弾。味方のだれかがその場所を見ていないと、遠くへずれます(点線の矢印)。右クリックで最後の1発を取り消し。`
           : '集中して撃つ敵をクリックします。もう一度クリックで解除。'
         }</div>
       </div>
+      ${u.kind === 'mortar' ? `
+      <div class="group"><h3>迫撃砲</h3>
+        <div class="row">${btn('data-deploy="1"', '展開する(撃てる状態に)', !!o.deploy)}${btn('data-deploy="0"', '展開しない', !o.deploy)}</div>
+        <div class="hint">展開に${MORTAR.deploySec}秒、動くには撤収に${MORTAR.packSec}秒かかります。経路が残っているときは、着いてから展開します。残弾 ${u.rounds}/${MORTAR.rounds}。</div>
+        ${(o.fireMissions ?? []).length === 0 ? '<div class="hint">射撃命令なし(「迫撃砲の射撃」で地図をクリック)</div>' : `<ol class="wps">${(o.fireMissions ?? [])
+          .map((m, i) => `<li>${i + 1}発目<input type="number" min="0" max="10" step="1" value="${m.atSec}" data-at="${i}" />秒に発射 <button data-delmission="${i}">消す</button></li>`)
+          .join('')}</ol>`}
+      </div>` : ''}
       <div class="group"><h3>経路(点ごとの待機秒数)</h3>
         ${o.route.length === 0 ? '<div class="hint">経路なし(その場にとどまる)</div>' : `<ol class="wps">${o.route
           .map((w, i) => `<li>点${i + 1}<input type="number" min="0" max="10" step="1" value="${w.waitSec}" data-wait="${i}" />秒待つ</li>`)
@@ -112,6 +127,7 @@ export function renderPanel(el: HTMLElement, p: PanelProps) {
         <i style="background:#8a6438"></i>軟らかい遮蔽(木柵):正面から±60°の射撃を×0.5。弾は通る
         <i style="background:rgba(52,110,46,.8)"></i>茂み・果樹林:中にいると、半分の距離まで近づかれないと見つからない
         <i style="background:#5b3d34"></i>建物:入れない。弾をさえぎる
+        <i style="border:2px solid #ffe07a"></i>迫撃砲の着弾範囲:内側の輪(8 m)で被害、外側の輪(15 m)で制圧。伏せると×0.5、遮蔽の内側なら×0.3
         <i style="background:#ffd60a;border-radius:50%"></i>動揺(制圧値40〜)
         <i style="background:#ff9500;border-radius:50%"></i>制圧(70〜):離脱以外では動かない
         <i style="background:#ff3b30;border-radius:50%"></i>釘付け(100):盲射しかできない
@@ -131,6 +147,15 @@ export function renderPanel(el: HTMLElement, p: PanelProps) {
       p.onChange();
     }));
   on('[data-act=undoPoint]', () => (p.tool === 'withdraw' ? o.withdrawRoute.pop() : o.route.pop()));
+  on('[data-deploy]', (b) => (o.deploy = b.dataset.deploy === '1'));
+  on('[data-delmission]', (b) => o.fireMissions?.splice(Number(b.dataset.delmission), 1));
+  el.querySelectorAll<HTMLInputElement>('[data-at]').forEach((inp) =>
+    inp.addEventListener('change', () => {
+      const m = o.fireMissions?.[Number(inp.dataset.at)];
+      if (m) m.atSec = Math.max(0, Math.min(10, Math.round(Number(inp.value) || 0)));
+      p.onChange();
+    }),
+  );
   on('[data-act=clearRoute]', () => (o.route = []));
   on('[data-act=clearWithdraw]', () => (o.withdrawRoute = []));
   on('[data-facing=auto]', () => (o.facing = null));

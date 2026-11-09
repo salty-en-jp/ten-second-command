@@ -1,4 +1,4 @@
-import { unitStats } from './config';
+import { MORTAR, unitStats } from './config';
 import type { Orders, Side, Unit, UnitKind, Vec2 } from './types';
 
 export function defaultOrders(): Orders {
@@ -8,6 +8,11 @@ export function defaultOrders(): Orders {
 /** 射撃班を作る */
 export function makeFireteam(id: string, side: Side, pos: Vec2, facing: number, orders?: Partial<Orders>): Unit {
   return makeUnit('fireteam', id, side, pos, facing, orders);
+}
+
+/** 迫撃砲班を作る */
+export function makeMortar(id: string, side: Side, pos: Vec2, facing: number, orders?: Partial<Orders>): Unit {
+  return makeUnit('mortar', id, side, pos, facing, orders);
 }
 
 /** スナイパーを作る */
@@ -23,6 +28,13 @@ export function makeUnit(kind: UnitKind, id: string, side: Side, pos: Vec2, faci
     pos: { ...pos },
     facing,
     hp: unitStats(kind).maxHp,
+    mortarState: 'packed',
+    mortarTicks: 0,
+    rounds: kind === 'mortar' ? MORTAR.rounds : 0,
+    missionQueue: [],
+    adjustedAim: null,
+    duckTicks: 0,
+    shelledOnly: false,
     suppression: 0,
     alive: true,
     prone: false,
