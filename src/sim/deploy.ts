@@ -24,7 +24,7 @@ export function canDeployAt(state: SimState, zone: DeployZone, p: Vec2, unit?: U
   if (p.x < zone.x || p.x > zone.x + zone.w || p.y < zone.y || p.y > zone.y + zone.h) return false;
   const b = buildingAt(state.map, p);
   if (b) {
-    if (!unit || (unit.kind !== 'fireteam' && unit.kind !== 'sniper')) return false;
+    if (!unit || (unit.kind !== 'fireteam' && unit.kind !== 'sniper' && unit.kind !== 'mg')) return false;
     const others = state.units.filter((u) => u.side === unit.side && u.id !== unit.id && u.inBuilding === b.id).length;
     return others < capacityOf(b);
   }

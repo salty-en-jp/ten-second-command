@@ -13,7 +13,7 @@ export function addLabel(id: string, name: string) {
 /** 編成で買った部隊の名前(id の番号から) */
 export function defaultName(kind: UnitKind, id: string): string {
   const n = id.replace(/^\D+/, '') || '1';
-  return kind === 'fireteam' ? `第${n}班` : kind === 'sniper' ? `狙撃手${n === '1' ? '' : n}` : kind === 'mortar' ? `迫撃砲班${n === '1' ? '' : n}` : `IFV${n === '1' ? '' : n}`;
+  return kind === 'fireteam' ? `第${n}班` : kind === 'sniper' ? `狙撃手${n === '1' ? '' : n}` : kind === 'mortar' ? `迫撃砲班${n === '1' ? '' : n}` : kind === 'mg' ? `機関銃班${n === '1' ? '' : n}` : `IFV${n === '1' ? '' : n}`;
 }
 
 export function cloneOrders(o: Orders): Orders {

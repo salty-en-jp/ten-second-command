@@ -6,7 +6,7 @@ export function renderMissionSelect(main: HTMLElement, status: HTMLElement, stag
   status.textContent = 'ミッションを選んでください';
   const count = (s: StageData, side: 'blue' | 'red') => s.units.filter((u) => u.side === side);
   const desc = (us: StageData['units']) =>
-    us.map((u) => (u.kind === 'sniper' ? '狙撃手' : u.kind === 'mortar' ? '迫撃砲班' : u.kind === 'ifv' ? 'IFV' : '射撃班')).reduce<Record<string, number>>((a, k) => ({ ...a, [k]: (a[k] ?? 0) + 1 }), {});
+    us.map((u) => (u.kind === 'sniper' ? '狙撃手' : u.kind === 'mortar' ? '迫撃砲班' : u.kind === 'ifv' ? 'IFV' : u.kind === 'mg' ? '機関銃班' : '射撃班')).reduce<Record<string, number>>((a, k) => ({ ...a, [k]: (a[k] ?? 0) + 1 }), {});
   const fmt = (d: Record<string, number>) => Object.entries(d).map(([k, n]) => `${k}×${n}`).join('、');
   main.innerHTML = `
     <section class="missions">

@@ -8,6 +8,7 @@ import {
   AT_WEAPON,
   BUILDING,
   IFV,
+  MG,
   MORTAR,
   PHASE_TICKS,
   WALL,
@@ -206,7 +207,7 @@ function moveDest(u: Unit): Vec2 | null {
  * 制圧状態以上では進まない。
  */
 function buildingMove(map: MapData, u: Unit, prev: Unit[], canMove: boolean): void {
-  if (u.kind !== 'fireteam' && u.kind !== 'sniper') return;
+  if (u.kind !== 'fireteam' && u.kind !== 'sniper' && u.kind !== 'mg') return;
   if (u.inBuilding !== null) {
     const dest = moveDest(u);
     const b = buildingById(map, u.inBuilding);
@@ -406,11 +407,16 @@ function shooterFactor(u: Unit): number {
   return 1;
 }
 
-/** 距離による火力の減衰。design.md 6.1 */
-function rangeFactor(d: number): number {
-  if (d <= FIRETEAM.effectiveRange) return 1;
-  if (d >= FIRETEAM.maxRange) return 0;
-  return 1 - (d - FIRETEAM.effectiveRange) / (FIRETEAM.maxRange - FIRETEAM.effectiveRange);
+/** 据え付けた機関銃か */
+const mgSet = (u: Unit) => u.kind === 'mg' && u.mortarState === 'deployed';
+
+/** 距離による火力の減衰。design.md 6.1(据え付けた機関銃は 6.8 の射程) */
+function rangeFactor(d: number, shooter?: Unit): number {
+  const eff = shooter && mgSet(shooter) ? MG.effectiveRange : FIRETEAM.effectiveRange;
+  const max = shooter && mgSet(shooter) ? MG.maxRange : FIRETEAM.maxRange;
+  if (d <= eff) return 1;
+  if (d >= max) return 0;
+  return 1 - (d - eff) / (max - eff);
 }
 
 /**
@@ -485,7 +491,7 @@ export function step(state: SimState): SimState {
 
     // 移動
     // 迫撃砲は収納していないと動けない。飛翔音で伏せている間も動かない
-    const mortarCanMove = u.kind === 'mortar' ? updateMortarState(u) : true;
+    const mortarCanMove = u.kind === 'mortar' || u.kind === 'mg' ? updateMortarState(u) : true;
     if (u.duckTicks > 0) u.duckTicks--;
     const canMove = !isSuppressed(u) && mortarCanMove && u.duckTicks === 0;
     const mountTarget = u.orders.mountId ? s.units.find((x) => x.id === u.orders.mountId) : undefined;
@@ -503,7 +509,11 @@ export function step(state: SimState): SimState {
         if (canMove) followRoute(map, u); // 反応するまでは前の行動を続ける
         if (--u.reactTicksLeft <= 0) {
           const threat = u.threatPos ?? u.pos;
-          if (u.inBuilding !== null || effectiveCover(map, u.pos, threat)) {
+          if (mgSet(u)) {
+            // 据え付けた機関銃は遮蔽を探して動かない(遮蔽の外なら伏せる)
+            if (!effectiveCover(map, u.pos, threat) && u.inBuilding === null) u.prone = true;
+            u.activity = 'engaged';
+          } else if (u.inBuilding !== null || effectiveCover(map, u.pos, threat)) {
             u.activity = 'engaged';
           } else {
             u.coverTarget = findCover(map, u.pos, threat, unitStats(u.kind).speed);
@@ -562,13 +572,25 @@ export function step(state: SimState): SimState {
     }
     if (u.kind === 'sniper') {
       sniperDecide(u, pu, enemies, known[u.side], canFire && inContact, map, prevById, s.tick + 1);
+    } else if (u.kind === 'mg' && u.reaimFacing !== null) {
+      // 機関銃の据え直し中:撃たない
+      if (u.cooldownTicks > 0) u.cooldownTicks--;
+      if (u.cooldownTicks === 0) {
+        u.orders = { ...u.orders, facing: u.reaimFacing };
+        u.reaimFacing = null;
+      }
     } else if (canFire && inContact) {
       const pinned = isPinned(u);
+      // 据え付けた機関銃:向きを中心に 60° の扇形の中だけ、遠くまで撃てる。design.md 6.8
+      const set = mgSet(u);
+      const center = u.orders.facing ?? u.facing;
+      const inArc = (p: Vec2) => !set || angleDiff(center, angleTo(u.pos, p)) <= MG.arcWidth / 2;
       const targets = enemies.filter(
         (e) =>
           known[u.side].has(e.id) &&
+          inArc(e.pos) &&
           // 迫撃砲班の小銃は自衛用:有効射程(100 m)の中の敵だけを撃つ
-          dist(u.pos, e.pos) < (u.kind === 'mortar' ? FIRETEAM.effectiveRange : FIRETEAM.maxRange) &&
+          dist(u.pos, e.pos) < (u.kind === 'mortar' ? FIRETEAM.effectiveRange : set ? MG.maxRange : FIRETEAM.maxRange) &&
           lineOfFire(map, u.pos, e.pos) &&
           // 煙の向こうの敵は狙って撃てない(最終確認位置への制圧射撃はできる)
           !smokeBlocks(map, u.pos, e.pos) &&
@@ -587,7 +609,7 @@ export function step(state: SimState): SimState {
       const focus = u.orders.focusTargetId;
       const focused = focus !== null ? targets.find((e) => e.id === focus) : undefined;
       const canSuppressAt = (p: Vec2 | null): p is Vec2 =>
-        !pinned && p !== null && dist(u.pos, p) < FIRETEAM.maxRange && lineOfFire(map, u.pos, p);
+        !pinned && p !== null && inArc(p) && dist(u.pos, p) < (set ? MG.maxRange : FIRETEAM.maxRange) && lineOfFire(map, u.pos, p);
       if (focused) {
         aim(u, focused, pinned);
       } else if (focus !== null && u.lastKnownTargetId === focus && canSuppressAt(u.lastKnownTargetPos)) {
@@ -595,7 +617,12 @@ export function step(state: SimState): SimState {
         u.shot = { targetId: null, point: { ...u.lastKnownTargetPos }, blind: false };
       } else {
         const t = nearest(u.pos, targets);
-        if (t) aim(u, t, pinned);
+        // 扇形の外から撃たれて、扇形の中に撃てる敵がいない:そちらへ据え直す(2 秒)
+        const from = wasShot && !pu.shelledOnly ? pu.lastShotFrom : null;
+        if (set && !t && from && !inArc(from)) {
+          u.reaimFacing = angleTo(u.pos, from);
+          u.cooldownTicks = Math.round(MG.reaimSec * TICKS_PER_SECOND);
+        } else if (t) aim(u, t, pinned);
         else if (u.orders.policy === 'hold' && u.activity === 'engaged' && canSuppressAt(u.lastKnownTargetPos)) {
           u.shot = { targetId: null, point: { ...u.lastKnownTargetPos }, blind: false }; // 制圧射撃
         }
@@ -609,7 +636,11 @@ export function step(state: SimState): SimState {
     }
 
     // 向き(スナイパーは「向き」を指定されていれば射界を見張り続ける)
-    if (u.kind === 'sniper' && u.orders.facing !== null) u.facing = u.orders.facing;
+    if ((u.kind === 'sniper' || mgSet(u)) && u.orders.facing !== null) u.facing = u.orders.facing;
+    else if (mgSet(u)) {
+      // 据え付けたら、その向きを射界の中心として覚える
+      u.orders = { ...u.orders, facing: u.facing };
+    }
     else if (u.activity !== 'route' && u.threatPos) u.facing = angleTo(u.pos, u.threatPos);
     else if (u.orders.facing !== null) u.facing = u.orders.facing;
     else if (u.moved) u.facing = angleTo(pu.pos, u.pos);
@@ -642,9 +673,11 @@ export function step(state: SimState): SimState {
       ? 1
       : (menAlive(shooter) / unitStats(shooter.kind).men) *
         shooterFactor(shooter) *
-        (shooter.kind === 'mortar' ? MORTAR.smallArmsFactor : 1);
-    const firepower = isCannon ? IFV.firepower : FIRETEAM.firepower;
-    const suppPerSec = isCannon ? IFV.suppressionPerSec : SUPPRESSION.perFireteamPerSec;
+        (shooter.kind === 'mortar' ? MORTAR.smallArmsFactor : 1) *
+        (shooter.kind === 'mg' && !mgSet(shooter) ? MG.unsetFactor : 1);
+    const isMg = shooter.kind === 'mg';
+    const firepower = isCannon ? IFV.firepower : isMg ? MG.firepower : FIRETEAM.firepower;
+    const suppPerSec = isCannon ? IFV.suppressionPerSec : isMg ? MG.suppressionPerSec : SUPPRESSION.perFireteamPerSec;
     const strong = shooter.suppression < SUPPRESSION.stopsRecoveryBelow;
     const blindDmg = shooter.shot.blind ? BLIND_FIRE.damage : 1;
     const blindSupp = shooter.shot.blind ? BLIND_FIRE.suppression : 1;
@@ -652,11 +685,11 @@ export function step(state: SimState): SimState {
       // IFV を撃つ:小銃は装甲に効かず(制圧値だけ)、機関砲は当たった面で効き方が変わる
       const t = prevById.get(shooter.shot.targetId)!;
       const f = isCannon ? ifvDamageFactor(map, t, from, 'cannon') : 0;
-      const r = isCannon ? 1 : rangeFactor(dist(from, t.pos)) * power;
+      const r = isCannon ? 1 : rangeFactor(dist(from, t.pos), shooter) * power;
       hit(t.id, (firepower * f) / TICKS_PER_SECOND, (suppPerSec * r) / TICKS_PER_SECOND, from, strong);
     } else if (shooter.shot.targetId !== null) {
       const t = prevById.get(shooter.shot.targetId)!;
-      const r = (isCannon ? 1 : rangeFactor(dist(from, t.pos))) * power;
+      const r = (isCannon ? 1 : rangeFactor(dist(from, t.pos), shooter)) * power;
       // 建物の中の班:向きの内側からは強く守られ、横・後ろや突破口のあとは弱い
       const bf = buildingDamageFactor(map, t, from);
       // IFV の機関砲に撃たれ続けた硬い遮蔽は崩れ、建物の外壁には突破口が開く
@@ -683,11 +716,11 @@ export function step(state: SimState): SimState {
     } else {
       // 制圧射撃:ダメージなし、制圧値は半分
       const p = shooter.shot.point;
-      const r = rangeFactor(dist(from, p)) * power * SUPPRESSION.suppressiveFireFactor;
+      const r = rangeFactor(dist(from, p), shooter) * power * SUPPRESSION.suppressiveFireFactor;
       for (const t of prev) {
         if (!t.alive || t.mountedIn !== null || t.side === shooter.side || dist(t.pos, p) > SUPPRESSION.suppressiveFireRadius) continue;
         const sf = effectiveCover(map, t.pos, from) ? COVER.suppressionFactor : 1;
-        hit(t.id, 0, (SUPPRESSION.perFireteamPerSec * r * sf) / TICKS_PER_SECOND, from, strong);
+        hit(t.id, 0, (suppPerSec * r * sf) / TICKS_PER_SECOND, from, strong);
       }
     }
   }

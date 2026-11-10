@@ -111,6 +111,39 @@ export const MORTAR = {
 } as const;
 
 /**
+ * 機関銃チーム(M60、3人:射手・副射手・弾薬手)。design.md 6.8
+ * 弾を長く撃ち続けられるので、倒す力より抑え込む力と射程が強み(FM 7-8 付録A、FM 3-21.8 付録A)。
+ */
+export const MG = {
+  maxHp: 75,
+  hpPerMan: 25,
+  men: 3,
+  /** m/秒 (暫定) */
+  speed: 2,
+  proneSpeed: 0.8,
+  sightRange: 120,
+  sightArc: 120 * DEG,
+  /** 耐久/秒 (暫定)。射撃班の 0.8 倍(設計目標6のため) */
+  firepower: 8,
+  /** 制圧値/秒 (暫定)。射撃班の 1.6 倍 */
+  suppressionPerSec: 40,
+  /** 据え付けたときの射程 (暫定):この距離まで減衰なし、maxRange で 0 */
+  effectiveRange: 150,
+  maxRange: 250,
+  /** 据え付け・片付け(秒) (暫定) */
+  setupSec: 3,
+  packSec: 2,
+  /** 据え付けずに撃つときの威力の倍率と射程(射撃班と同じ) */
+  unsetFactor: 0.5,
+  /** 据え付けたときに撃てる扇形の幅(向きが中心) */
+  arcWidth: 60 * DEG,
+  /** 扇形の外から撃たれたとき、そちらへ据え直す秒数(その間は撃たない) */
+  reaimSec: 2,
+  /** 撃ったあと見つかりやすい時間(秒)。曳光弾 */
+  exposureSec: 4,
+} as const;
+
+/**
  * 歩兵戦闘車(IFV)。design.md 6.4(M2 ブラッドレーを抽象化。FM 7-7J)
  */
 export const IFV = {
@@ -257,12 +290,13 @@ export const DEPLOY_COST = {
   sniper: 8,
   mortar: 12,
   ifv: 20,
+  mg: 12,
   at: 3,
 } as const;
 
 /** 兵科ごとの基本の値 */
-export function unitStats(kind: 'fireteam' | 'sniper' | 'mortar' | 'ifv') {
-  return kind === 'sniper' ? SNIPER : kind === 'mortar' ? MORTAR : kind === 'ifv' ? IFV : FIRETEAM;
+export function unitStats(kind: 'fireteam' | 'sniper' | 'mortar' | 'ifv' | 'mg') {
+  return kind === 'sniper' ? SNIPER : kind === 'mortar' ? MORTAR : kind === 'ifv' ? IFV : kind === 'mg' ? MG : FIRETEAM;
 }
 
 /** 接触時の自動行動。design.md 7章 */

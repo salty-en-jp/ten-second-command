@@ -1,20 +1,21 @@
 /**
  * 視界(フォグ・オブ・ウォー)。design.md 4.1
  */
-import { BUILDING, IFV, SUPPRESSION, TICKS_PER_SECOND, unitStats, VISION } from './config';
+import { BUILDING, IFV, MG, SUPPRESSION, TICKS_PER_SECOND, unitStats, VISION } from './config';
 import { angleDiff, angleTo, dist } from './geometry';
 import { insideConcealment, lineOfFire } from './terrain';
 import { smokeBlocks } from './smoke';
 import type { MapData, Side, SideVision, SimState, Unit } from './types';
 
 const EXPOSURE_TICKS = Math.round(VISION.fireExposureSec * TICKS_PER_SECOND);
+const MG_EXPOSURE_TICKS = Math.round(MG.exposureSec * TICKS_PER_SECOND);
 
 /** viewer が target を発見できる距離(viewer の視界距離に、茂みと発砲による暴露の倍率をかける) */
 export function detectionRange(map: MapData, viewer: Unit, target: Unit): number {
   let r = unitStats(viewer.kind).sightRange;
   if (target.inBuilding !== null) r *= BUILDING.detectionFactor;
   else if (insideConcealment(map, target.pos)) r *= VISION.concealmentFactor;
-  if (target.ticksSinceFired < EXPOSURE_TICKS) r *= VISION.fireExposureFactor;
+  if (target.ticksSinceFired < (target.kind === 'mg' ? MG_EXPOSURE_TICKS : EXPOSURE_TICKS)) r *= VISION.fireExposureFactor;
   return r;
 }
 
