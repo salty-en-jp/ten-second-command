@@ -20,6 +20,7 @@ import {
   angleTo,
   approachPoint,
   armyCost,
+  DIFFICULTY,
   armyValid,
   boardInDeployment,
   buyUnit,
@@ -62,7 +63,7 @@ import {
   type View,
 } from '../render/draw';
 import { addLabel, defaultName, draftsFor, label, setLabels } from './orders';
-import { loadMapStyle, saveBest, saveMapStyle } from './storage';
+import { bestId, loadDifficulty, loadMapStyle, saveBest, saveMapStyle, type Difficulty } from './storage';
 import { renderPanel, type Tool } from './panel';
 
 type Mode = 'deploying' | 'planning' | 'executing' | 'over' | 'replay';
@@ -88,6 +89,14 @@ export class App {
   private speed = 1;
   private lastTime = 0;
   private view: View;
+  private difficulty: Difficulty = 'normal';
+
+  /** ステージを読み込む(難易度の倍率つき) */
+  private load(): SimState {
+    const s = loadStage(this.stage);
+    if (this.difficulty === 'easy') s.incoming = { blue: DIFFICULTY.easy.incoming };
+    return s;
+  }
   /** これまでの実行フェイズの全ティック(リプレイ用) */
   private history: SimState[] = [];
   private paused = false;
@@ -117,10 +126,15 @@ export class App {
     private status: HTMLElement,
     stage: StageData,
   ) {
-    this.stage = stage;
+    // 難易度「やさしい」:持ち点 ×1.2、目標フェイズ +3、敵から受ける被害と制圧値 ×0.75
+    this.difficulty = loadDifficulty();
+    const easy = DIFFICULTY.easy;
+    this.stage = this.difficulty === 'easy'
+      ? { ...stage, budget: stage.budget ? Math.floor(stage.budget * easy.budget) : undefined, par: stage.par !== undefined ? stage.par + easy.par : undefined }
+      : stage;
     setLabels(stage.units);
     canvas.style.aspectRatio = `${stage.width} / ${stage.height}`;
-    this.initial = loadStage(stage);
+    this.initial = this.load();
     if (stage.deployment && stage.deployZone) {
       // 配置フェイズ:敵 AI はまだ命令を出さない(配置が決まってから考える)
       this.mode = 'deploying';
@@ -213,7 +227,7 @@ export class App {
 
   /** 配置フェイズを始める(ステージに書かれた味方が最初の編成) */
   private startDeployment() {
-    this.current = loadStage(this.stage);
+    this.current = this.load();
     setLabels(this.stage.units);
     this.fixSelection();
   }
@@ -395,7 +409,7 @@ export class App {
     if (this.current.outcome !== 'ongoing') {
       this.mode = 'over';
       const ev = evaluate(this.initial, this.current, this.phase, this.stage.par ?? 99);
-      this.result = { ev, best: saveBest(this.stage.id, ev.stars) };
+      this.result = { ev, best: saveBest(bestId(this.stage.id, this.difficulty), ev.stars) };
     } else {
       this.mode = 'planning';
       this.phase++;
@@ -599,7 +613,7 @@ export class App {
         ? this.current.units.some((u) => u.side === 'blue' && u.alive) ? '敗北:防衛線を突破されました' : '敗北:味方が全滅しました'
       : this.current.outcome === 'draw' ? '引き分け:双方が全滅しました'
       : '';
-    const ai = this.stage.aiLabel ? `敵:${this.stage.aiLabel.name}(${this.stage.aiLabel.hint})  ` : '';
+    const ai = (this.difficulty === 'easy' ? '[やさしい] ' : '') + (this.stage.aiLabel ? `敵:${this.stage.aiLabel.name}(${this.stage.aiLabel.hint})  ` : '');
     this.status.textContent =
       ai +
       (this.mode === 'over' ? outcomeText

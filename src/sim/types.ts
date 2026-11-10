@@ -272,6 +272,8 @@ export interface SimState {
   wallDamage: Record<string, number>;
   /** 防衛線:守る側の陣営と、攻める側がこの y より手前(小さい側)に入ったら守る側の負け */
   defenseLine?: { defender: Side; y: number } | null;
+  /** 難易度:陣営ごとの、受ける被害と制圧値の倍率(省略時 1) */
+  incoming?: Partial<Record<Side, number>>;
   /** 敵 AI の記憶(フェイズをまたいで覚えておくこと) */
   ai?: AiMemory;
 }

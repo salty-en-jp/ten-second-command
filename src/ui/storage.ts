@@ -1,6 +1,25 @@
 /** 成績(ミッションごとの一番よい星の数)をブラウザに保存する。保存できない環境では何もしない */
 const key = (id: string) => `ten-second-command:best:${id}`;
 
+/** 難易度(ふつう/やさしい)をブラウザに覚えておく */
+export type Difficulty = 'normal' | 'easy';
+export function loadDifficulty(): Difficulty {
+  try {
+    return localStorage.getItem('tsc.difficulty') === 'easy' ? 'easy' : 'normal';
+  } catch {
+    return 'normal';
+  }
+}
+export function saveDifficulty(d: Difficulty) {
+  try {
+    localStorage.setItem('tsc.difficulty', d);
+  } catch {
+    /* 保存できなくても遊べる */
+  }
+}
+/** 成績の保存先:やさしいは別に記録する */
+export const bestId = (id: string | undefined, d: Difficulty) => (id && d === 'easy' ? `${id}:easy` : id);
+
 export function loadBest(id: string | undefined): number {
   if (!id) return 0;
   try {
