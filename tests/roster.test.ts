@@ -1,62 +1,65 @@
-/** 編成ポイント制のテスト。design.md 3章 */
+/** 編成ポイント制(好きな兵科を好きな数だけ買う)のテスト。design.md 3章 */
 import { describe, expect, it } from 'vitest';
-import { applyRoster, defaultRoster, DEPLOY_COST, loadStage, rosterCost, rosterValid, type StageData } from '../src/sim';
+import {
+  armyCost, armyValid, boardInDeployment, buyUnit, DEPLOY_COST, leaveInDeployment, loadStage, nextUnitId, sellUnit, setAt, type StageData,
+} from '../src/sim';
 import crossroadsJson from '../stages/crossroads.json';
 import riversideJson from '../stages/riverside.json';
+import kaidoJson from '../stages/kaido.json';
 import { unit } from './helpers';
 
 const crossroads = crossroadsJson as StageData;
 const riverside = riversideJson as StageData;
 
 describe('編成ポイント', () => {
-  it('最初の編成は控えを含まず、持ち点ちょうどに収まる', () => {
-    for (const st of [crossroads, riverside]) {
-      const base = loadStage(st, true);
-      const c = defaultRoster(st);
-      expect(rosterCost(base, c)).toBe(st.budget);
-      expect(rosterValid(base, c, st.budget!)).toBe(true);
-      // 控えなしで読み込んだ状態と、最初の編成を当てはめた状態は同じ部隊
-      const ids = (s: ReturnType<typeof loadStage>) => s.units.map((u) => u.id).join(',');
-      expect(ids(applyRoster(base, c))).toBe(ids(loadStage(st)));
+  it('ステージに書かれた最初の編成は、持ち点以内', () => {
+    for (const st of [crossroads, riverside, kaidoJson as StageData]) {
+      const s = loadStage(st);
+      expect(armyCost(s)).toBeLessThanOrEqual(st.budget!);
+      expect(armyValid(s, st.budget!)).toBe(true);
     }
   });
 
-  it('控えを足すと持ち点を超えて出撃できない。かわりに何かを外せば出撃できる', () => {
-    const base = loadStage(crossroads, true);
-    const c = defaultRoster(crossroads);
-    c.b3 = { take: true, at: false };
-    expect(rosterCost(base, c)).toBe(crossroads.budget! + DEPLOY_COST.fireteam);
-    expect(rosterValid(base, c, crossroads.budget!)).toBe(false);
-    c.m1 = { take: false, at: false };
-    expect(rosterValid(base, c, crossroads.budget!)).toBe(true);
-    const s = applyRoster(base, c);
-    expect(s.units.some((u) => u.id === 'm1')).toBe(false);
-    expect(unit(s, 'b3').alive).toBe(true);
+  it('数の上限なく買える。全部を狙撃手にもできる', () => {
+    let s = loadStage(crossroads);
+    for (const u of s.units.filter((x) => x.side === 'blue')) s = sellUnit(s, u.id);
+    expect(armyValid(s, crossroads.budget!)).toBe(false); // 1部隊もない
+    for (let i = 0; i < 5; i++) s = buyUnit(s, 'sniper', crossroads.deployZone!)!.state;
+    const snipers = s.units.filter((u) => u.side === 'blue');
+    expect(snipers.map((u) => u.id)).toEqual(['bs', 'bs2', 'bs3', 'bs4', 'bs5']);
+    expect(armyCost(s)).toBe(5 * DEPLOY_COST.sniper);
+    expect(armyValid(s, crossroads.budget!)).toBe(true);
+    // 買った部隊は配置エリアの中で、互いに離れて置かれる
+    for (const u of snipers) {
+      const z = crossroads.deployZone!;
+      expect(u.pos.x >= z.x && u.pos.x <= z.x + z.w && u.pos.y >= z.y && u.pos.y <= z.y + z.h).toBe(true);
+    }
+  });
+
+  it('持ち点を超えると出撃できない', () => {
+    const r = buyUnit(loadStage(crossroads), 'fireteam', crossroads.deployZone!)!;
+    expect(r.id).toBe('b3');
+    expect(armyCost(r.state)).toBe(armyCost(loadStage(crossroads)) + DEPLOY_COST.fireteam);
+    expect(armyValid(r.state, crossroads.budget!)).toBe(false);
   });
 
   it('射撃班の対戦車火器は +3 点で1発', () => {
-    const base = loadStage(crossroads, true);
-    const c = defaultRoster(crossroads);
-    c.b1 = { take: true, at: true };
-    expect(rosterCost(base, c)).toBe(crossroads.budget! + DEPLOY_COST.at);
-    expect(unit(applyRoster(base, c), 'b1').atRounds).toBe(1);
-    expect(unit(applyRoster(base, defaultRoster(crossroads)), 'b1').atRounds).toBe(0);
+    const s0 = loadStage(crossroads);
+    const s = setAt(s0, 'b1', true);
+    expect(unit(s, 'b1').atRounds).toBe(1);
+    expect(armyCost(s)).toBe(armyCost(s0) + DEPLOY_COST.at);
   });
 
-  it('IFV を連れていかなければ、乗っていた班は降りた状態で出る', () => {
-    const base = loadStage(riverside, true);
-    const c = defaultRoster(riverside);
-    expect(unit(applyRoster(base, c), 'b3').mountedIn).toBe('v1');
-    c.v1 = { take: false, at: false };
-    const s = applyRoster(base, c);
-    expect(s.units.some((u) => u.id === 'v1')).toBe(false);
+  it('IFV を外すと乗っていた班は降りる。配置フェイズで乗せ直せる', () => {
+    let s = loadStage(riverside);
+    expect(unit(s, 'b3').mountedIn).toBe('v1');
+    s = leaveInDeployment(s, 'b3', riverside.deployZone!);
     expect(unit(s, 'b3').mountedIn).toBeNull();
-  });
-
-  it('1部隊も選ばなければ出撃できない', () => {
-    const base = loadStage(crossroads, true);
-    const c = defaultRoster(crossroads);
-    for (const k of Object.keys(c)) c[k] = { take: false, at: false };
-    expect(rosterValid(base, c, crossroads.budget!)).toBe(false);
+    expect(unit(s, 'v1').passengerId).toBeNull();
+    s = boardInDeployment(s, 'b3', 'v1');
+    expect(unit(s, 'b3').mountedIn).toBe('v1');
+    s = sellUnit(s, 'v1');
+    expect(unit(s, 'b3').mountedIn).toBeNull();
+    expect(nextUnitId(s, 'ifv')).toBe('v1');
   });
 });

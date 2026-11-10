@@ -5,7 +5,6 @@ import type { MapData, Orders, Side, SimState, TerrainFeature, TerrainKind, Unit
 import { createState } from './step';
 import { applyAi, type AiPlan } from './ai';
 import { buildingAt } from './building';
-import type { RosterChoice } from './roster';
 
 /** ステージ JSON の形。角度は度数で書く */
 export interface StageData {
@@ -41,8 +40,6 @@ export interface StageData {
     mountedIn?: string;
     /** 軽対戦車火器の弾数(射撃班のオプション装備) */
     at?: number;
-    /** 控え:編成ポイント制のミッションで、選べるが最初は連れていかない部隊 */
-    reserve?: boolean;
   }>;
   /** 敵 AI(省略時は決まった命令のまま) */
   ai?: AiPlan;
@@ -52,16 +49,15 @@ export interface StageData {
   defenseLine?: { defender: Side; y: number };
   /** 配置フェイズがあるか(true なら、ステージの始めに配置可能エリアの中で味方を置き直せる) */
   deployment?: boolean;
-  /** 編成ポイントの持ち点(配置フェイズのあるミッション)。省略時は編成を選べない */
+  /** 編成ポイントの持ち点(配置フェイズのあるミッション)。省略時は編成を選べない。ステージに書いた味方は最初の編成 */
   budget?: number;
+  /** 編成で買える兵科 */
+  shop?: UnitKind[];
   /** 配置可能エリア */
   deployZone?: { x: number; y: number; w: number; h: number };
 }
 
-/**
- * ステージの初期状態を作る。控えの部隊は含めない(withReserves なら含める:配置フェイズの編成用)
- */
-export function loadStage(data: StageData, withReserves = false): SimState {
+export function loadStage(data: StageData): SimState {
   const features: TerrainFeature[] = data.features.map((f) => ({
     id: f.id,
     kind: f.kind,
@@ -69,7 +65,7 @@ export function loadStage(data: StageData, withReserves = false): SimState {
     ...(f.enterable ? { enterable: true } : {}),
   }));
   const map: MapData = { width: data.width, height: data.height, features };
-  const units = data.units.filter((u) => withReserves || !u.reserve).map((u) => {
+  const units = data.units.map((u) => {
     const { facingDeg, ...rest } = u.orders ?? {};
     const orders: Orders = {
       ...defaultOrders(),
@@ -84,7 +80,7 @@ export function loadStage(data: StageData, withReserves = false): SimState {
     return unit;
   });
   for (const u of data.units) {
-    if (!u.mountedIn || !units.some((x) => x.id === u.id)) continue;
+    if (!u.mountedIn) continue;
     const p = units.find((x) => x.id === u.id)!;
     const v = units.find((x) => x.id === u.mountedIn);
     if (v) mount(p, v);
@@ -92,13 +88,6 @@ export function loadStage(data: StageData, withReserves = false): SimState {
   const state = createState(map, units);
   if (data.defenseLine) state.defenseLine = { ...data.defenseLine };
   return state;
-}
-
-/** 最初の編成:控え以外を連れていく。対戦車火器はステージに書かれた班だけ */
-export function defaultRoster(data: StageData): RosterChoice {
-  const c: RosterChoice = {};
-  for (const u of data.units) if (u.side === 'blue') c[u.id] = { take: !u.reserve, at: (u.at ?? 0) > 0 };
-  return c;
 }
 
 /** ステージに敵 AI があれば、計画フェイズの開始時に AI の命令を出す */

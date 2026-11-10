@@ -24,8 +24,8 @@ interface PanelProps {
   onChange(): void;
   onRetry(): void;
   /** 配置フェイズの編成(編成ポイント制のミッションだけ) */
-  roster?: { budget: number; choice: Record<string, { take: boolean; at: boolean }>; units: Unit[]; cost: number };
-  onRoster?(id: string, field: 'take' | 'at'): void;
+  army?: { budget: number; shop: Array<Unit['kind']>; cost: number };
+  onArmy?(act: 'buy' | 'sell' | 'at' | 'leave', arg: string): void;
 }
 
 const stateText = (u: Unit) => {
@@ -178,22 +178,20 @@ export function renderPanel(el: HTMLElement, p: PanelProps) {
           .join('')}</div>
       </div>`;
   } else if (p.mode === 'deploying') {
-    const r = p.roster;
+    const r = p.army;
     if (r) {
       const kindName = { fireteam: '射撃班', sniper: '狙撃手', mortar: '迫撃砲班', ifv: 'IFV' } as const;
       const over = r.cost > r.budget;
       html += `<div class="group"><h3>編成(持ち点 ${r.budget})</h3>
-        <div class="hint" style="${over ? 'color:#ff9f43' : ''}">使っている点数:${r.cost} / ${r.budget}${over ? '(持ち点を超えています。部隊を減らしてください)' : `(残り ${r.budget - r.cost})`}</div>
-        <ul class="roster">${r.units
-          .map((x) => {
-            const c = r.choice[x.id] ?? { take: false, at: false };
-            const cost = unitCost(x, c.at);
-            return `<li>${btn(`data-take="${x.id}"`, `${c.take ? '✔ ' : ''}${label(x)}(${kindName[x.kind]} ${DEPLOY_COST[x.kind]}点)`, c.take)}${
-              x.kind === 'fireteam' && c.take ? btn(`data-rat="${x.id}"`, `対戦車火器 +${DEPLOY_COST.at}点`, c.at) : ''
-            }${c.take ? ` <span class="hint">計 ${cost}点</span>` : ''}</li>`;
-          })
+        <div class="hint" style="${over ? 'color:#ff9f43' : ''}">使っている点数:${r.cost} / ${r.budget}${over ? '(持ち点を超えています。部隊を外してください)' : `(残り ${r.budget - r.cost})`}</div>
+        <div class="row">${r.shop.map((k) => `<button data-buy="${k}" ${DEPLOY_COST[k] > r.budget - r.cost ? 'disabled' : ''}>+ ${kindName[k]}(${DEPLOY_COST[k]}点)</button>`).join('')}</div>
+        <ul class="roster">${blue
+          .map((x) => `<li>${label(x)}(${kindName[x.kind]} ${unitCost(x, x.atRounds > 0)}点)
+            ${x.kind === 'fireteam' ? btn(`data-rat="${x.id}"`, `対戦車火器 +${DEPLOY_COST.at}点`, x.atRounds > 0) : ''}
+            ${x.mountedIn !== null ? `<button data-leave="${x.id}">${label({ id: x.mountedIn })}から降ろす</button>` : ''}
+            <button data-sell="${x.id}">外す</button></li>`)
           .join('')}</ul>
-        <div class="hint">押すと「連れていく/置いていく」が切り替わります。余った点数は評価に関係ありません。</div></div>`;
+        <div class="hint">「+」で部隊を買います(数の上限なし)。射撃班を IFV の上にドラッグすると乗ります。余った点数は評価に関係ありません。</div></div>`;
     }
     html += `<div class="group"><h3>配置する部隊</h3>
       <div class="row units">${blue.filter((x) => x.alive && x.mountedIn === null).map((x) => btn(`data-sel="${x.id}"`, label(x), x.id === p.selected)).join('')}</div>
@@ -226,8 +224,10 @@ export function renderPanel(el: HTMLElement, p: PanelProps) {
   el.querySelector('[data-act=redeploy]')?.addEventListener('click', () => p.onRedeploy?.());
   el.querySelectorAll<HTMLElement>('[data-sel]').forEach((b) => b.addEventListener('click', () => p.onSelect(b.dataset.sel!)));
   el.querySelectorAll<HTMLElement>('[data-tool]').forEach((b) => b.addEventListener('click', () => p.onTool(b.dataset.tool as Tool)));
-  el.querySelectorAll<HTMLElement>('[data-take]').forEach((b) => b.addEventListener('click', () => p.onRoster?.(b.dataset.take!, 'take')));
-  el.querySelectorAll<HTMLElement>('[data-rat]').forEach((b) => b.addEventListener('click', () => p.onRoster?.(b.dataset.rat!, 'at')));
+  el.querySelectorAll<HTMLElement>('[data-buy]').forEach((b) => b.addEventListener('click', () => p.onArmy?.('buy', b.dataset.buy!)));
+  el.querySelectorAll<HTMLElement>('[data-sell]').forEach((b) => b.addEventListener('click', () => p.onArmy?.('sell', b.dataset.sell!)));
+  el.querySelectorAll<HTMLElement>('[data-rat]').forEach((b) => b.addEventListener('click', () => p.onArmy?.('at', b.dataset.rat!)));
+  el.querySelectorAll<HTMLElement>('[data-leave]').forEach((b) => b.addEventListener('click', () => p.onArmy?.('leave', b.dataset.leave!)));
   if (!o) return;
   const on = (sel: string, f: (b: HTMLElement) => void) =>
     el.querySelectorAll<HTMLElement>(sel).forEach((b) => b.addEventListener('click', () => {
