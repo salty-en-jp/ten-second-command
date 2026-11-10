@@ -21,7 +21,8 @@ export function cloneOrders(o: Orders): Orders {
     ...o,
     route: o.route.map((w) => ({ pos: { ...w.pos }, waitSec: w.waitSec })),
     withdrawRoute: o.withdrawRoute.map((p) => ({ ...p })),
-    fireMissions: (o.fireMissions ?? []).map((m) => ({ target: { ...m.target }, atSec: m.atSec, kind: m.kind })),
+    fireMissions: (o.fireMissions ?? []).map((m) => ({ target: { ...m.target }, atSec: m.atSec, kind: m.kind, registered: m.registered })),
+    onCall: (o.onCall ?? []).map((t) => ({ target: { ...t.target }, rounds: t.rounds })),
     smokeThrows: (o.smokeThrows ?? []).map((m) => ({ target: { ...m.target }, atSec: m.atSec })),
   };
 }
@@ -37,7 +38,7 @@ export function carryOver(u: Unit, nowTick = 0): Orders {
   if (first && u.waitTicksLeft >= 0) o.route[0] = { pos: first.pos, waitSec: Math.ceil(u.waitTicksLeft / 20) };
   o.withdrawRoute = o.withdrawRoute.slice(u.withdrawIndex);
   // 迫撃砲:まだ撃っていない射撃命令だけ残す(発射時刻は次のフェイズの開始からの秒数に直す)
-  o.fireMissions = u.missionQueue.map((m) => ({ target: { ...m.target }, atSec: Math.max(0, Math.round((m.tick - nowTick) / 20)), kind: m.kind }));
+  o.fireMissions = u.missionQueue.map((m) => ({ target: { ...m.target }, atSec: Math.max(0, Math.round((m.tick - nowTick) / 20)), kind: m.kind, registered: m.registered }));
   o.smokeThrows = u.smokeQueue.map((m) => ({ target: { ...m.target }, atSec: Math.max(0, Math.round((m.tick - nowTick) / 20)) }));
   return o;
 }

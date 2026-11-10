@@ -14,6 +14,14 @@ export interface FireMission {
   atSec: number;
   /** 迫撃砲の弾の種類(省略時は榴弾) */
   kind?: 'he' | 'smoke';
+  /** 待機射撃で、予め登録した地点への射撃(最初から正確に落ちる) */
+  registered?: boolean;
+}
+
+/** 迫撃砲の待機射撃:味方のだれかがこの地点の近くに敵を見つけたら、rounds 発撃つ。design.md 6.3 */
+export interface OnCallTarget {
+  target: Vec2;
+  rounds: number;
 }
 
 /** 煙の雲:startTick から endTick まで、半径 r の円を通る視線をさえぎる */
@@ -94,6 +102,8 @@ export interface Orders {
   deploy?: boolean;
   /** 迫撃砲:射撃命令 */
   fireMissions?: FireMission[];
+  /** 迫撃砲:待機射撃(撃ったものから消える。フェイズをまたいで残る) */
+  onCall?: OnCallTarget[];
   /** IFV:経路の終点で止まったら、乗っている班を下車させる */
   dismount?: boolean;
   /** 射撃班:この IFV に乗車する(IFV の後ろへ歩いて行って乗る) */
@@ -183,7 +193,7 @@ export interface Unit {
   mortarTicks: number;
   rounds: number;
   /** まだ撃っていない射撃命令(撃つティックつき) */
-  missionQueue: Array<{ target: Vec2; tick: number; kind?: 'he' | 'smoke' }>;
+  missionQueue: Array<{ target: Vec2; tick: number; kind?: 'he' | 'smoke'; registered?: boolean }>;
   /** 迫撃砲:残りの発煙弾(弾数 rounds の内数) */
   smokeRounds: number;
   /** 射撃班:残りの発煙手榴弾と、まだ投げていない命令 */

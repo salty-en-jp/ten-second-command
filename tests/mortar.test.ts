@@ -151,3 +151,34 @@ describe('迫撃砲', () => {
     expect(unit(after.s, 'r1').pos.x).toBe(x0); // 伏せている間は動かない
   });
 });
+
+describe('待機射撃(予定目標)', () => {
+  // 迫撃砲は (100,0)、展開済み。登録地点は (100,150)。敵は北から登録地点へ歩いてくる
+  const setup = (observer: boolean) => {
+    const m = makeMortar('m', 'blue', { x: 100, y: 0 }, 90 * DEG, { fire: 'hold', deploy: true, onCall: [{ target: { x: 100, y: 150 }, rounds: 3 }] });
+    m.mortarState = 'deployed';
+    const units = [m, makeFireteam('r', 'red', { x: 100, y: 200 }, -90 * DEG, { fire: 'hold', policy: 'advance', route: [{ pos: { x: 100, y: 150 }, waitSec: 10 }] })];
+    // 観測者:登録地点を見ている味方の班(射撃禁止で隠れて見ている)
+    if (observer) units.push(makeFireteam('b', 'blue', { x: 100, y: 80 }, 90 * DEG, { fire: 'hold' }));
+    // 観測者は茂みの中:敵からは 60 m まで近づかないと見えない(敵は気づかずに歩いてくる)
+    return createState({ width: 200, height: 260, features: [{ id: 'bush', kind: 'concealment', poly: rect(100, 80, 10, 10) }] }, units);
+  };
+
+  it('味方が登録地点の近くに敵を見つけたら、登録した数を撃つ。観測がなくても最初から正確に落ちる', () => {
+    let s = setup(true);
+    const impacts: Array<{ x: number; y: number }> = [];
+    for (let i = 0; i < seconds(40); i++) {
+      s = step(s);
+      for (const im of s.impacts) if (im.tick === s.tick) impacts.push(im.pos);
+    }
+    expect(impacts.length).toBe(3);
+    for (const p of impacts) expect(Math.hypot(p.x - 100, p.y - 150)).toBeLessThan(0.01);
+    expect(s.units.find((u) => u.id === 'm')!.orders.onCall).toEqual([]); // 撃った地点は消える
+  });
+
+  it('だれも敵を見ていなければ撃たない', () => {
+    let s = setup(false);
+    for (let i = 0; i < seconds(40); i++) s = step(s);
+    expect(s.units.find((u) => u.id === 'm')!.rounds).toBe(8);
+  });
+});

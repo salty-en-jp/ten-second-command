@@ -22,9 +22,9 @@ export const WARNING_TICKS = Math.round(MORTAR.warningSec * TICKS_PER_SECOND);
 export function queueMissions(u: Unit, nowTick: number): void {
   const ms = u.orders.fireMissions ?? [];
   u.missionQueue = ms
-    .map((m, i) => ({ target: { ...m.target }, tick: nowTick + Math.round(m.atSec * TICKS_PER_SECOND), i, kind: m.kind }))
+    .map((m, i) => ({ target: { ...m.target }, tick: nowTick + Math.round(m.atSec * TICKS_PER_SECOND), i, kind: m.kind, registered: m.registered }))
     .sort((a, b) => a.tick - b.tick || a.i - b.i)
-    .map(({ target, tick, kind }) => ({ target, tick, kind }));
+    .map(({ target, tick, kind, registered }) => ({ target, tick, kind, registered }));
 }
 
 /** 移動しようとしているか(まだ経路が残っている、退避中、離脱中) */
@@ -80,7 +80,7 @@ export function tryFire(u: Unit, nextTick: number, map: MapData, shellId: number
     if (d < MORTAR.minRange || d > MORTAR.maxRange) continue; // 射程外
     const smoke = m.kind === 'smoke';
     if (smoke && u.smokeRounds <= 0) continue; // 発煙弾が残っていない
-    const observed = u.adjustedAim !== null && dist(u.adjustedAim, m.target) <= MORTAR.adjustRadius;
+    const observed = m.registered === true || (u.adjustedAim !== null && dist(u.adjustedAim, m.target) <= MORTAR.adjustRadius);
     let impact = { ...m.target };
     if (!observed) {
       // 観測されていない:迫撃砲から見て遠くへずれる
@@ -107,6 +107,22 @@ export function tryFire(u: Unit, nextTick: number, map: MapData, shellId: number
     };
   }
   return null;
+}
+
+/**
+ * 待機射撃(予定目標・最終防護射撃。FM 23-90):登録した地点の近くに、陣営が見ている敵がいれば、その地点へ登録した弾数を撃つ。
+ * 撃った地点は登録から消える。予め測ってある地点なので、観測がなくても正確に落ちる。1ティックに1地点まで。
+ */
+export function triggerOnCall(u: Unit, nextTick: number, spotted: Vec2[]): void {
+  const list = u.orders.onCall ?? [];
+  if (list.length === 0 || u.mortarState !== 'deployed' || u.rounds <= 0) return;
+  const i = list.findIndex((t) => spotted.some((p) => dist(p, t.target) <= MORTAR.onCallRadius));
+  if (i < 0) return;
+  const t = list[i]!;
+  const n = Math.max(1, Math.min(MORTAR.onCallMaxRounds, Math.round(t.rounds)));
+  for (let k = 0; k < n; k++) u.missionQueue.push({ target: { ...t.target }, tick: nextTick, kind: 'he', registered: true });
+  u.missionQueue.sort((a, b) => a.tick - b.tick);
+  u.orders = { ...u.orders, onCall: list.filter((_, j) => j !== i) };
 }
 
 /** p にいる者が、どれかの遮蔽物の内側にいるか(迫撃砲は上から落ちるので向きは問わない) */

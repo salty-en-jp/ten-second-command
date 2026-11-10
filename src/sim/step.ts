@@ -22,7 +22,7 @@ import { effectiveCover, insideBuilding, lineOfFire, occupies, protectingHard, p
 import { computeVision, sees } from './vision';
 import { atDecide, dismountStep, ifvDamageFactor, ifvFollowRoute, ifvFollowWithdraw, inBackblast, mountStep, onIfvDestroyed, turnToward } from './ifv';
 import { mortarSmoke, queueThrows, smokeBlocks, tryThrow, updateSmokes } from './smoke';
-import { blastEffect, inAnyCover, pointObserved, queueMissions, tryFire, updateMortarState, WARNING_TICKS } from './mortar';
+import { blastEffect, inAnyCover, pointObserved, queueMissions, triggerOnCall, tryFire, updateMortarState, WARNING_TICKS } from './mortar';
 import { menAlive } from './units';
 import { approachPoint, ASSAULT_TICKS, atEntrance, buildingById, buildingDamageFactor, capacityOf, ENTER_TICKS, EXIT_TICKS, insidePoint } from './building';
 import type { MapData, Orders, SimState, Unit, Vec2 } from './types';
@@ -42,7 +42,7 @@ function cloneUnit(u: Unit): Unit {
     lastFire: u.lastFire && { tick: u.lastFire.tick, point: { ...u.lastFire.point } },
     shot: u.shot && { ...u.shot, point: { ...u.shot.point } },
     orders: u.orders,
-    missionQueue: u.missionQueue.map((m) => ({ target: { ...m.target }, tick: m.tick, kind: m.kind })),
+    missionQueue: u.missionQueue.map((m) => ({ target: { ...m.target }, tick: m.tick, kind: m.kind, registered: m.registered })),
     smokeQueue: u.smokeQueue.map((m) => ({ target: { ...m.target }, tick: m.tick })),
     adjustedAim: u.adjustedAim && { ...u.adjustedAim },
   };
@@ -98,7 +98,8 @@ export function issueOrders(state: SimState, orders: Record<string, Orders>): Si
       ...o,
       route: o.route.map((w) => ({ pos: { ...w.pos }, waitSec: w.waitSec })),
       withdrawRoute: o.withdrawRoute.map((p) => ({ ...p })),
-      fireMissions: (o.fireMissions ?? []).map((m) => ({ target: { ...m.target }, atSec: m.atSec, kind: m.kind })),
+      fireMissions: (o.fireMissions ?? []).map((m) => ({ target: { ...m.target }, atSec: m.atSec, kind: m.kind, registered: m.registered })),
+      onCall: (o.onCall ?? []).map((t) => ({ target: { ...t.target }, rounds: t.rounds })),
       smokeThrows: (o.smokeThrows ?? []).map((m) => ({ target: { ...m.target }, atSec: m.atSec })),
     };
     if (u.kind === 'mortar') queueMissions(u, state.tick);
@@ -552,6 +553,7 @@ export function step(state: SimState): SimState {
       if (cloud) s.smokes = [...s.smokes, cloud];
     }
     if (u.kind === 'mortar') {
+      triggerOnCall(u, s.tick + 1, enemies.filter((e) => state.vision[u.side].visible.includes(e.id)).map((e) => e.pos));
       const shell = tryFire(u, s.tick + 1, map, s.nextShellId, isPinned(u));
       if (shell) {
         s.shells = [...s.shells, shell];

@@ -355,6 +355,33 @@ export function drawFireMissions(v: View, u: Unit, missions: Array<{ target: Vec
   });
 }
 
+/** 迫撃砲の待機射撃の地点:この円の中に味方が敵を見つけたら撃つ */
+export function drawOnCall(v: View, targets: Array<{ target: Vec2; rounds: number }>) {
+  const { ctx } = v;
+  for (const t of targets) {
+    const c = toScreen(v, t.target);
+    ctx.save();
+    ctx.strokeStyle = '#ff9f43';
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([6, 4]);
+    ctx.beginPath();
+    ctx.arc(c.x, c.y, MORTAR.onCallRadius * v.scale, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.beginPath();
+    ctx.moveTo(c.x - 5, c.y);
+    ctx.lineTo(c.x + 5, c.y);
+    ctx.moveTo(c.x, c.y - 5);
+    ctx.lineTo(c.x, c.y + 5);
+    ctx.stroke();
+    ctx.fillStyle = '#ffcf99';
+    ctx.font = '11px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText(`待機射撃 ${t.rounds}発`, c.x, c.y - MORTAR.onCallRadius * v.scale - 4);
+    ctx.restore();
+  }
+}
+
 /** 飛んでいる味方の迫撃砲弾の着弾予定位置 */
 export function drawShells(v: View, shells: Shell[], side: 'blue' | 'red', tick: number) {
   for (const sh of shells) {
