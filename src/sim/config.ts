@@ -245,6 +245,18 @@ export const SMOKE = {
   },
 } as const;
 
+/**
+ * 編成ポイント (暫定)。配置フェイズのあるミッションで、持ち点の中から連れていく部隊を選ぶ。design.md 3章
+ * 軽対戦車火器は射撃班のオプション(1発)。
+ */
+export const DEPLOY_COST = {
+  fireteam: 10,
+  sniper: 8,
+  mortar: 12,
+  ifv: 20,
+  at: 3,
+} as const;
+
 /** 兵科ごとの基本の値 */
 export function unitStats(kind: 'fireteam' | 'sniper' | 'mortar' | 'ifv') {
   return kind === 'sniper' ? SNIPER : kind === 'mortar' ? MORTAR : kind === 'ifv' ? IFV : FIRETEAM;

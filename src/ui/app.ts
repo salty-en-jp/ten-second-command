@@ -19,6 +19,11 @@ import {
   dist,
   angleTo,
   approachPoint,
+  applyRoster,
+  defaultRoster,
+  rosterCost,
+  rosterValid,
+  type RosterChoice,
   buildingAt,
   type Orders,
   type SimState,
@@ -75,6 +80,9 @@ export class App {
   private speed = 1;
   private lastTime = 0;
   private view: View;
+  /** 配置フェイズ:控えも含めた全部隊の位置(編成を変えても位置を覚えておく)と、編成の選択 */
+  private deployBase: SimState | null = null;
+  private roster: RosterChoice = {};
 
   constructor(
     private canvas: HTMLCanvasElement,
@@ -91,6 +99,7 @@ export class App {
       // 配置フェイズ:敵 AI はまだ命令を出さない(配置が決まってから考える)
       this.mode = 'deploying';
       this.current = this.initial;
+      this.startDeployment();
     } else {
       this.current = planAi(this.initial, stage); // 敵 AI は計画フェイズの開始時に命令を出す
     }
@@ -156,7 +165,7 @@ export class App {
       this.dragPos = p;
       this.canvas.setPointerCapture?.(e.pointerId);
     } else if (this.selected) {
-      this.current = deployUnit(this.current, this.stage.deployZone!, this.selected, p);
+      this.moveInDeployment(this.selected, p);
     }
     this.refreshUI();
   }
@@ -168,14 +177,50 @@ export class App {
 
   private onDeployUp(e: PointerEvent) {
     if (this.mode !== 'deploying' || !this.dragging) return;
-    this.current = deployUnit(this.current, this.stage.deployZone!, this.dragging, this.worldOf(e));
+    this.moveInDeployment(this.dragging, this.worldOf(e));
     this.dragging = null;
     this.dragPos = null;
     this.refreshUI();
   }
 
+  /** 配置フェイズを始める(控えも含めて読み込み、最初の編成にする) */
+  private startDeployment() {
+    this.deployBase = loadStage(this.stage, true);
+    this.roster = defaultRoster(this.stage);
+    this.applyRosterChoice();
+  }
+
+  /** 編成の選択を反映する(連れていかない部隊は地図から消える) */
+  private applyRosterChoice() {
+    if (!this.deployBase) return;
+    this.current = this.stage.budget ? applyRoster(this.deployBase, this.roster) : this.deployBase;
+    if (this.selected && !this.current.units.some((u) => u.id === this.selected)) {
+      this.selected = this.current.units.find((u) => u.side === 'blue' && u.mountedIn === null)?.id ?? null;
+    }
+  }
+
+  /** 置き直した位置を、控えも含めた全部隊の状態に写す */
+  private moveInDeployment(id: string, p: Vec2) {
+    const next = deployUnit(this.current, this.stage.deployZone!, id, p);
+    if (next === this.current || !this.deployBase) return;
+    const base = this.deployBase;
+    this.deployBase = {
+      ...base,
+      units: base.units.map((u) => {
+        const n = next.units.find((x) => x.id === u.id);
+        return n && (n.id === id || n.mountedIn === id || u.mountedIn === id) ? { ...u, pos: { ...n.pos }, facing: n.facing, turret: n.turret } : u;
+      }),
+    };
+    this.applyRosterChoice();
+  }
+
+  private rosterOk(): boolean {
+    return !this.stage.budget || !this.deployBase || rosterValid(this.deployBase, this.roster, this.stage.budget);
+  }
+
   /** 配置完了:この配置を「やり直し」の出発点にして、計画フェイズへ */
   finishDeployment() {
+    if (!this.rosterOk()) return;
     this.initial = this.current;
     this.current = planAi(this.initial, this.stage);
     this.drafts = draftsFor(this.current);
@@ -186,8 +231,8 @@ export class App {
 
   /** 配置からやり直す */
   redeploy() {
-    this.initial = loadStage(this.stage);
-    this.current = this.initial;
+    this.startDeployment();
+    this.initial = this.current;
     this.result = null;
     this.frames = [];
     this.phase = 1;
@@ -488,13 +533,23 @@ export class App {
     // タイムライン
     const planning = this.mode === 'planning';
     if (this.mode === 'deploying') {
-      this.timeline.innerHTML = `<button class="primary" data-act="deployed">✔ 配置完了(計画フェイズへ)</button>
+      this.timeline.innerHTML = `<button class="primary" data-act="deployed" ${this.rosterOk() ? '' : 'disabled'}>✔ 配置完了(計画フェイズへ)</button>
         <span class="hint">部隊を点線の配置エリアの中でドラッグして置いてください(スマホは、部隊をタップしてから置きたい場所をタップ)。置いた場所から見える敵だけが表示されます。</span>`;
       this.timeline.querySelector('[data-act=deployed]')?.addEventListener('click', () => this.finishDeployment());
       this.status.textContent = (this.stage.aiLabel ? `敵:${this.stage.aiLabel.name}  ` : '') + '配置フェイズ';
       renderPanel(this.panel, {
         result: null, vision: this.current.vision.blue, tick: 0, revealAll: false, mode: 'deploying', outcomeText: '',
         units: this.current.units, selected: this.selected, drafts: {}, tool: this.tool,
+        roster: this.stage.budget && this.deployBase
+          ? { budget: this.stage.budget, choice: this.roster, units: this.deployBase.units.filter((u) => u.side === 'blue'), cost: rosterCost(this.deployBase, this.roster) }
+          : undefined,
+        onRoster: (id, field) => {
+          const c = this.roster[id];
+          if (!c) return;
+          c[field] = !c[field];
+          this.applyRosterChoice();
+          this.refreshUI();
+        },
         onSelect: (id) => { this.selected = id; this.refreshUI(); },
         onTool: () => {}, onChange: () => {}, onRetry: () => this.retry(),
       });

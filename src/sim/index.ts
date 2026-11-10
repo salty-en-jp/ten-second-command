@@ -13,3 +13,4 @@ export * from './evaluate';
 export * from './deploy';
 export * from './smoke';
 export * from './building';
+export * from './roster';
