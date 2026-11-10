@@ -87,6 +87,20 @@ export class App {
   /** これまでの実行フェイズの全ティック(リプレイ用) */
   private history: SimState[] = [];
   private paused = false;
+  /** 教官のメモを閉じているか(ミッションを開き直すと、また開く) */
+  private tutorialHidden = false;
+
+  /** いまのフェイズの教官のメモ(そのフェイズ以前で一番新しいもの) */
+  private tutorialStep() {
+    const steps = this.stage.tutorial ?? [];
+    const ph = this.mode === 'deploying' ? 0 : this.phase;
+    const st = steps.filter((x) => x.phase <= ph).at(-1);
+    return st ? { title: st.title, lines: st.lines, hidden: this.tutorialHidden } : null;
+  }
+  private onTutorial = (show: boolean) => {
+    this.tutorialHidden = !show;
+    this.refreshUI();
+  };
   /** 実行中かリプレイ中で、ティックの列を再生しているか */
   private get playing(): boolean {
     return (this.mode === 'executing' || this.mode === 'replay') && this.frames.length > 0;
@@ -630,6 +644,8 @@ export class App {
           ? { budget: this.stage.budget, shop: this.stage.shop ?? ['fireteam'], cost: armyCost(this.current) }
           : undefined,
         onArmy: (act, arg) => this.onArmy(act, arg),
+        tutorial: this.tutorialStep(),
+        onTutorial: this.onTutorial,
         onSelect: (id) => { this.selected = id; this.refreshUI(); },
         onTool: () => {}, onChange: () => {}, onRetry: () => this.retry(),
       });
@@ -707,6 +723,8 @@ export class App {
       revealAll: this.revealAll || this.mode === 'replay',
       mode: this.mode === 'replay' ? 'executing' : this.mode,
       onReplay: this.history.length > 0 ? () => this.startReplay() : undefined,
+      tutorial: this.tutorialStep(),
+      onTutorial: this.onTutorial,
       outcomeText,
       units,
       selected: this.selected,

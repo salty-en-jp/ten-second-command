@@ -100,3 +100,9 @@ header a.back { color: var(--muted); font-size: 13px; }
 .mission .best { color: var(--accent); font-size: 18px; margin-bottom: 4px; }
 .roster { margin: 4px 0; padding: 0; list-style: none; }
 .roster li { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 3px 0; }
+
+.tutorial { background: #2a3324; border: 1px solid #6f8f4e; border-radius: 6px; padding: 8px 10px; margin-bottom: 10px; }
+.tutorial p { margin: 4px 0; font-size: 13px; line-height: 1.5; }
+.tut-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.tut-tag { color: #b8d68f; font-size: 12px; }
+.tut-head button { white-space: nowrap; }
