@@ -120,3 +120,24 @@ describe('敵 AI', () => {
     expect(unit(a, 'r').orders.route[0]!.pos).toEqual({ x: 210.5, y: 210 });
   });
 });
+
+describe('待ち伏せ型:建物の陣地で横を突かれたら下がる', () => {
+  it('家の中の陣地の向き(±60°)の外に敵がいれば、次の陣地へ下がる命令を出す', async () => {
+    const { applyAi, createState, makeFireteam, rect, DEG } = await import('../src/sim');
+    const map = { width: 300, height: 300, features: [
+      { id: 'h1', kind: 'building' as const, enterable: true, poly: rect(100, 150, 14, 10) },
+      { id: 'h2', kind: 'building' as const, enterable: true, poly: rect(100, 220, 14, 10) },
+    ] };
+    const r = makeFireteam('r1', 'red', { x: 100, y: 147 }, -90 * DEG, { fire: 'free' });
+    r.inBuilding = 'h1';
+    r.ticksSinceFired = 0; // 撃ち合いが始まっている
+    const b = makeFireteam('b1', 'blue', { x: 170, y: 150 }, 180 * DEG, { fire: 'hold' }); // 真横(東)
+    const s = createState(map, [r, b]);
+    s.vision.red.visible = ['b1'];
+    const plan = { personality: 'ambush' as const, side: 'red' as const, positions: { r1: [{ x: 100, y: 147, facingDeg: -90 }, { x: 100, y: 217, facingDeg: -90 }] } };
+    const out = applyAi(s, plan);
+    const o = out.units.find((u) => u.id === 'r1')!.orders;
+    expect(o.enterId).toBe('h2');
+    expect(o.policy).toBe('withdraw');
+  });
+});

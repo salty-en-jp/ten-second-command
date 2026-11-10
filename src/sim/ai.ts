@@ -5,8 +5,8 @@
  * - 乱数は使わない。迷ったら距離、次に id の順で決める
  * 根拠:FM 100-2-1(1984)、FM 7-8(1992)、ATP 3-21.8(2024)。
  */
-import { DEG, PHASE_TICKS, TICKS_PER_SECOND } from './config';
-import { angleTo, dist } from './geometry';
+import { COVER, DEG, PHASE_TICKS, TICKS_PER_SECOND } from './config';
+import { angleDiff, angleTo, dist } from './geometry';
 import { issueOrders } from './step';
 import { effectiveCover, lineOfFire } from './terrain';
 import { approachPoint, buildingAt } from './building';
@@ -134,6 +134,16 @@ export function applyAi(state: SimState, plan: AiPlan): SimState {
   return issueOrders({ ...state, ai: mem }, orders);
 }
 
+/**
+ * 横を突かれたか:正面には遮蔽が効く陣地なのに、敵が遮蔽の効かない向きにいる。
+ * 建物の陣地では、陣地の向き(±60°)の外にいる敵を「横」とする(design.md 6.7 の守りと同じ)。
+ */
+function flanked(state: SimState, u: Unit, here: AiPosition, enemy: Vec2): boolean {
+  if (u.inBuilding !== null) return angleDiff(here.facingDeg * DEG, angleTo(u.pos, enemy)) > COVER.arc;
+  const front = { x: u.pos.x + Math.cos(here.facingDeg * DEG) * 50, y: u.pos.y + Math.sin(here.facingDeg * DEG) * 50 };
+  return effectiveCover(state.map, u.pos, front) !== null && effectiveCover(state.map, u.pos, enemy) === null;
+}
+
 // ---------------------------------------------------------------- 待ち伏せ型
 
 /**
@@ -156,9 +166,7 @@ function ambush(state: SimState, plan: AiPlan, mem: AiMemory, us: Unit[], threat
       u.hp <= AI.retreatHp ||
       (u.suppression >= 40 && !!near && dist(u.pos, near.pos) <= AI.pressedRange) ||
       // 横を突かれた:正面には遮蔽が効く陣地なのに、敵が遮蔽の効かない向きにいる
-      (!!near && !!here && mem.firstFireTick !== null && dist(u.pos, near.pos) <= 120 &&
-        effectiveCover(state.map, u.pos, { x: u.pos.x + Math.cos(here.facingDeg * DEG) * 50, y: u.pos.y + Math.sin(here.facingDeg * DEG) * 50 }) !== null &&
-        effectiveCover(state.map, u.pos, near.pos) === null) ||
+      (!!near && !!here && mem.firstFireTick !== null && dist(u.pos, near.pos) <= 120 && flanked(state, u, here, near.pos)) ||
       longFight;
     const next = list[idx + 1];
     if ((pressed || broken) && next && (!retreatedThisPhase || broken)) {

@@ -1,0 +1,279 @@
+{
+  "id": "tani",
+  "name": "谷の集落(待ち伏せ・配置あり)",
+  "description": "谷あいの集落。敵の射撃班3つが家々にひそみ、60 m まで撃ってこない。押されると煙を投げて奥の家へ下がる。家の間の通りは見通しのよい殺し場。撃ってこない家ほど怪しい。持ち点58で部隊を買える(IFV も)。",
+  "par": 14,
+  "width": 300,
+  "height": 260,
+  "deployment": true,
+  "budget": 58,
+  "shop": [
+    "fireteam",
+    "sniper",
+    "mortar",
+    "ifv"
+  ],
+  "deployZone": {
+    "x": 10,
+    "y": 2,
+    "w": 280,
+    "h": 26
+  },
+  "features": [
+    {
+      "id": "bank",
+      "kind": "hard",
+      "note": "牧草地の低い土手(IFV が車体を隠せる)",
+      "rect": {
+        "cx": 150,
+        "cy": 95,
+        "w": 60,
+        "h": 1.5
+      }
+    },
+    {
+      "id": "houseFW",
+      "kind": "building",
+      "note": "手前の西の家",
+      "rect": {
+        "cx": 90,
+        "cy": 160,
+        "w": 14,
+        "h": 10
+      },
+      "enterable": true
+    },
+    {
+      "id": "houseFE",
+      "kind": "building",
+      "note": "手前の東の家",
+      "rect": {
+        "cx": 210,
+        "cy": 165,
+        "w": 14,
+        "h": 10
+      },
+      "enterable": true
+    },
+    {
+      "id": "houseM",
+      "kind": "building",
+      "note": "真ん中の家",
+      "rect": {
+        "cx": 150,
+        "cy": 200,
+        "w": 14,
+        "h": 10
+      },
+      "enterable": true
+    },
+    {
+      "id": "houseBW",
+      "kind": "building",
+      "note": "奥の西の家",
+      "rect": {
+        "cx": 80,
+        "cy": 235,
+        "w": 14,
+        "h": 10
+      },
+      "enterable": true
+    },
+    {
+      "id": "houseBE",
+      "kind": "building",
+      "note": "奥の東の家",
+      "rect": {
+        "cx": 220,
+        "cy": 238,
+        "w": 14,
+        "h": 10
+      },
+      "enterable": true
+    },
+    {
+      "id": "wallB",
+      "kind": "hard",
+      "note": "奥の石垣",
+      "rect": {
+        "cx": 150,
+        "cy": 248,
+        "w": 30,
+        "h": 1
+      }
+    },
+    {
+      "id": "hedgeW",
+      "kind": "concealment",
+      "note": "西の生け垣",
+      "rect": {
+        "cx": 40,
+        "cy": 150,
+        "w": 4,
+        "h": 120
+      }
+    },
+    {
+      "id": "orchardW",
+      "kind": "concealment",
+      "note": "西の果樹園",
+      "rect": {
+        "cx": 25,
+        "cy": 220,
+        "w": 40,
+        "h": 50
+      }
+    },
+    {
+      "id": "alleyE1",
+      "kind": "hard",
+      "note": "東の路地の石垣",
+      "rect": {
+        "cx": 262,
+        "cy": 175,
+        "w": 1,
+        "h": 50
+      }
+    },
+    {
+      "id": "alleyE2",
+      "kind": "hard",
+      "note": "東の路地の石垣",
+      "rect": {
+        "cx": 278,
+        "cy": 175,
+        "w": 1,
+        "h": 50
+      }
+    },
+    {
+      "id": "barn",
+      "kind": "building",
+      "note": "納屋",
+      "rect": {
+        "cx": 150,
+        "cy": 255,
+        "w": 24,
+        "h": 8
+      }
+    }
+  ],
+  "units": [
+    {
+      "id": "b1",
+      "name": "第1班",
+      "side": "blue",
+      "x": 70,
+      "y": 12,
+      "facingDeg": 90
+    },
+    {
+      "id": "b2",
+      "name": "第2班",
+      "side": "blue",
+      "x": 230,
+      "y": 12,
+      "facingDeg": 90
+    },
+    {
+      "id": "v1",
+      "name": "IFV",
+      "kind": "ifv",
+      "side": "blue",
+      "x": 150,
+      "y": 10,
+      "facingDeg": 90
+    },
+    {
+      "id": "b3",
+      "name": "第3班",
+      "side": "blue",
+      "x": 150,
+      "y": 10,
+      "facingDeg": 90,
+      "mountedIn": "v1"
+    },
+    {
+      "id": "bs",
+      "name": "狙撃手",
+      "kind": "sniper",
+      "side": "blue",
+      "x": 110,
+      "y": 8,
+      "facingDeg": 90
+    },
+    {
+      "id": "r1",
+      "name": "敵A",
+      "side": "red",
+      "x": 90,
+      "y": 157,
+      "facingDeg": -90
+    },
+    {
+      "id": "r2",
+      "name": "敵B",
+      "side": "red",
+      "x": 210,
+      "y": 162,
+      "facingDeg": -90,
+      "at": 1
+    },
+    {
+      "id": "r3",
+      "name": "敵C",
+      "side": "red",
+      "x": 150,
+      "y": 197,
+      "facingDeg": -90
+    }
+  ],
+  "ai": {
+    "personality": "ambush",
+    "side": "red",
+    "openFireRange": 60,
+    "positions": {
+      "r1": [
+        {
+          "x": 90,
+          "y": 157,
+          "facingDeg": -90
+        },
+        {
+          "x": 80,
+          "y": 232,
+          "facingDeg": -90
+        }
+      ],
+      "r2": [
+        {
+          "x": 210,
+          "y": 162,
+          "facingDeg": -90
+        },
+        {
+          "x": 220,
+          "y": 235,
+          "facingDeg": -90
+        }
+      ],
+      "r3": [
+        {
+          "x": 150,
+          "y": 197,
+          "facingDeg": -90
+        },
+        {
+          "x": 150,
+          "y": 250,
+          "facingDeg": -90
+        }
+      ]
+    }
+  },
+  "aiLabel": {
+    "name": "待ち伏せ型",
+    "description": "家にひそみ、近づくまで撃ってこない。撃たれたときには、もう奥の家へ下がる準備ができている。",
+    "hint": "撃ってこない家ほど怪しい"
+  }
+}
