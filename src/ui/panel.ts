@@ -23,6 +23,9 @@ interface PanelProps {
   onTool(t: Tool): void;
   onChange(): void;
   onRetry(): void;
+  /** チュートリアル:いまのフェイズの「教官のメモ」。hidden なら閉じている */
+  tutorial?: { title: string; lines: string[]; hidden: boolean } | null;
+  onTutorial?(show: boolean): void;
   /** 勝敗がついたあとのリプレイ */
   onReplay?(): void;
   /** 配置フェイズの編成(編成ポイント制のミッションだけ) */
@@ -88,6 +91,12 @@ export function renderPanel(el: HTMLElement, p: PanelProps) {
            <div class="hint">★1 勝利 / ★2 目標フェイズ以内 / ★3 さらに全滅した班なし・失った耐久30%以下</div>`
         : '';
     html += `<div class="overlay">${p.outcomeText}${evalHtml}<div class="row" style="justify-content:center">${p.onReplay ? '<button data-act="replay">▶ リプレイを見る(敵も見える)</button>' : ''}<button class="primary" data-act="retry">同じ配置からやり直す</button>${p.canRedeploy ? '<button data-act="redeploy">配置からやり直す</button>' : ''}<a href="#"><button>ミッション選択へ</button></a></div></div>`;
+  }
+  const tut = p.tutorial;
+  if (tut && (p.mode === 'planning' || p.mode === 'deploying')) {
+    html += tut.hidden
+      ? `<div class="row"><button data-tut="show">📘 教官のメモを開く</button></div>`
+      : `<div class="tutorial"><div class="tut-head"><b>📘 教官のメモ:${tut.title}</b><button data-tut="hide">閉じる</button></div>${tut.lines.map((l) => `<p>${l}</p>`).join('')}</div>`;
   }
   html += `<div class="group"><h3>部隊の状態</h3>${[...blue, ...red].map(status).join('')}</div>`;
 
@@ -228,6 +237,7 @@ export function renderPanel(el: HTMLElement, p: PanelProps) {
   el.innerHTML = html;
 
   el.querySelector('[data-act=retry]')?.addEventListener('click', p.onRetry);
+  el.querySelectorAll<HTMLElement>('[data-tut]').forEach((b) => b.addEventListener('click', () => p.onTutorial?.(b.dataset.tut === 'show')));
   el.querySelector('[data-act=replay]')?.addEventListener('click', () => p.onReplay?.());
   el.querySelector('[data-act=redeploy]')?.addEventListener('click', () => p.onRedeploy?.());
   el.querySelectorAll<HTMLElement>('[data-sel]').forEach((b) => b.addEventListener('click', () => p.onSelect(b.dataset.sel!)));

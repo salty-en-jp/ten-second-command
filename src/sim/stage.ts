@@ -51,6 +51,8 @@ export interface StageData {
   deployment?: boolean;
   /** 編成ポイントの持ち点(配置フェイズのあるミッション)。省略時は編成を選べない。ステージに書いた味方は最初の編成 */
   budget?: number;
+  /** チュートリアル:フェイズごとの「教官のメモ」(phase 0 は配置フェイズ) */
+  tutorial?: Array<{ phase: number; title: string; lines: string[] }>;
   /** 編成で買える兵科 */
   shop?: UnitKind[];
   /** 配置可能エリア */
