@@ -11,10 +11,11 @@ import riverside from '../stages/riverside.json';
 import kaido from '../stages/kaido.json';
 import tani from '../stages/tani.json';
 import asase from '../stages/asase.json';
+import sentai from '../stages/sentai.json';
 import { App } from './ui/app';
 import { renderMissionSelect } from './ui/missions';
 
-const STAGES = [village, ridge, hill, meadow, outskirtsA, outskirtsB, outskirtsC, crossroads, riverside, kaido, tani, asase] as StageData[];
+const STAGES = [village, ridge, hill, meadow, outskirtsA, outskirtsB, outskirtsC, crossroads, riverside, kaido, tani, asase, sentai] as StageData[];
 const $ = (id: string) => document.getElementById(id)!;
 
 // URL の #ステージid で直接そのミッションを開く(再読み込みしても同じミッションのまま)
