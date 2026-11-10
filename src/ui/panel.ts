@@ -1,5 +1,5 @@
 /** 右側のパネル:選んだ班への命令を入力する */
-import { BUILDING, MORTAR, SMOKE, SUPPRESSION, TICKS_PER_SECOND, type Orders, type SideVision, type Unit } from '../sim';
+import { BUILDING, DEPLOY_COST, MORTAR, unitCost, SMOKE, SUPPRESSION, TICKS_PER_SECOND, type Orders, type SideVision, type Unit } from '../sim';
 import { label } from './orders';
 import { starText } from './storage';
 import type { Evaluation } from '../sim';
@@ -23,6 +23,9 @@ interface PanelProps {
   onTool(t: Tool): void;
   onChange(): void;
   onRetry(): void;
+  /** 配置フェイズの編成(編成ポイント制のミッションだけ) */
+  roster?: { budget: number; choice: Record<string, { take: boolean; at: boolean }>; units: Unit[]; cost: number };
+  onRoster?(id: string, field: 'take' | 'at'): void;
 }
 
 const stateText = (u: Unit) => {
@@ -175,6 +178,23 @@ export function renderPanel(el: HTMLElement, p: PanelProps) {
           .join('')}</div>
       </div>`;
   } else if (p.mode === 'deploying') {
+    const r = p.roster;
+    if (r) {
+      const kindName = { fireteam: '射撃班', sniper: '狙撃手', mortar: '迫撃砲班', ifv: 'IFV' } as const;
+      const over = r.cost > r.budget;
+      html += `<div class="group"><h3>編成(持ち点 ${r.budget})</h3>
+        <div class="hint" style="${over ? 'color:#ff9f43' : ''}">使っている点数:${r.cost} / ${r.budget}${over ? '(持ち点を超えています。部隊を減らしてください)' : `(残り ${r.budget - r.cost})`}</div>
+        <ul class="roster">${r.units
+          .map((x) => {
+            const c = r.choice[x.id] ?? { take: false, at: false };
+            const cost = unitCost(x, c.at);
+            return `<li>${btn(`data-take="${x.id}"`, `${c.take ? '✔ ' : ''}${label(x)}(${kindName[x.kind]} ${DEPLOY_COST[x.kind]}点)`, c.take)}${
+              x.kind === 'fireteam' && c.take ? btn(`data-rat="${x.id}"`, `対戦車火器 +${DEPLOY_COST.at}点`, c.at) : ''
+            }${c.take ? ` <span class="hint">計 ${cost}点</span>` : ''}</li>`;
+          })
+          .join('')}</ul>
+        <div class="hint">押すと「連れていく/置いていく」が切り替わります。余った点数は評価に関係ありません。</div></div>`;
+    }
     html += `<div class="group"><h3>配置する部隊</h3>
       <div class="row units">${blue.filter((x) => x.alive && x.mountedIn === null).map((x) => btn(`data-sel="${x.id}"`, label(x), x.id === p.selected)).join('')}</div>
       <div class="hint">選んだ部隊を、地図の点線の配置エリアの中に置きます。建物や石垣の上には置けません。敵から見える場所に置くと、最初から見つかっています。</div></div>`;
@@ -206,6 +226,8 @@ export function renderPanel(el: HTMLElement, p: PanelProps) {
   el.querySelector('[data-act=redeploy]')?.addEventListener('click', () => p.onRedeploy?.());
   el.querySelectorAll<HTMLElement>('[data-sel]').forEach((b) => b.addEventListener('click', () => p.onSelect(b.dataset.sel!)));
   el.querySelectorAll<HTMLElement>('[data-tool]').forEach((b) => b.addEventListener('click', () => p.onTool(b.dataset.tool as Tool)));
+  el.querySelectorAll<HTMLElement>('[data-take]').forEach((b) => b.addEventListener('click', () => p.onRoster?.(b.dataset.take!, 'take')));
+  el.querySelectorAll<HTMLElement>('[data-rat]').forEach((b) => b.addEventListener('click', () => p.onRoster?.(b.dataset.rat!, 'at')));
   if (!o) return;
   const on = (sel: string, f: (b: HTMLElement) => void) =>
     el.querySelectorAll<HTMLElement>(sel).forEach((b) => b.addEventListener('click', () => {

@@ -98,3 +98,5 @@ header a.back { color: var(--muted); font-size: 13px; }
 .mission .ai { margin: 0 0 8px; padding: 6px 8px; background: rgba(255,107,90,0.12); border-left: 3px solid var(--red); font-size: 13px; line-height: 1.6; }
 .stars { font-size: 28px; color: var(--accent); letter-spacing: 4px; margin: 6px 0; }
 .mission .best { color: var(--accent); font-size: 18px; margin-bottom: 4px; }
+.roster { margin: 4px 0; padding: 0; list-style: none; }
+.roster li { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 3px 0; }
