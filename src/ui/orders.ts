@@ -1,4 +1,4 @@
-import type { Orders, SimState, Unit } from '../sim';
+import type { Orders, SimState, Unit, UnitKind } from '../sim';
 
 /** 画面に出す部隊名(ステージデータの name から設定する) */
 const UNIT_LABEL: Record<string, string> = {};
@@ -7,6 +7,14 @@ export function setLabels(units: Array<{ id: string; name?: string }>) {
   for (const u of units) if (u.name) UNIT_LABEL[u.id] = u.name;
 }
 export const label = (u: { id: string }) => UNIT_LABEL[u.id] ?? u.id;
+export function addLabel(id: string, name: string) {
+  UNIT_LABEL[id] = name;
+}
+/** 編成で買った部隊の名前(id の番号から) */
+export function defaultName(kind: UnitKind, id: string): string {
+  const n = id.replace(/^\D+/, '') || '1';
+  return kind === 'fireteam' ? `第${n}班` : kind === 'sniper' ? `狙撃手${n === '1' ? '' : n}` : kind === 'mortar' ? `迫撃砲班${n === '1' ? '' : n}` : `IFV${n === '1' ? '' : n}`;
+}
 
 export function cloneOrders(o: Orders): Orders {
   return {

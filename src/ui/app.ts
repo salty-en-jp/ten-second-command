@@ -19,11 +19,14 @@ import {
   dist,
   angleTo,
   approachPoint,
-  applyRoster,
-  defaultRoster,
-  rosterCost,
-  rosterValid,
-  type RosterChoice,
+  armyCost,
+  armyValid,
+  boardInDeployment,
+  buyUnit,
+  leaveInDeployment,
+  sellUnit,
+  setAt,
+  type UnitKind,
   buildingAt,
   type Orders,
   type SimState,
@@ -53,7 +56,7 @@ import {
   toWorld,
   type View,
 } from '../render/draw';
-import { draftsFor, label, setLabels } from './orders';
+import { addLabel, defaultName, draftsFor, label, setLabels } from './orders';
 import { saveBest } from './storage';
 import { renderPanel, type Tool } from './panel';
 
@@ -80,9 +83,6 @@ export class App {
   private speed = 1;
   private lastTime = 0;
   private view: View;
-  /** 配置フェイズ:控えも含めた全部隊の位置(編成を変えても位置を覚えておく)と、編成の選択 */
-  private deployBase: SimState | null = null;
-  private roster: RosterChoice = {};
 
   constructor(
     private canvas: HTMLCanvasElement,
@@ -183,39 +183,51 @@ export class App {
     this.refreshUI();
   }
 
-  /** 配置フェイズを始める(控えも含めて読み込み、最初の編成にする) */
+  /** 配置フェイズを始める(ステージに書かれた味方が最初の編成) */
   private startDeployment() {
-    this.deployBase = loadStage(this.stage, true);
-    this.roster = defaultRoster(this.stage);
-    this.applyRosterChoice();
+    this.current = loadStage(this.stage);
+    setLabels(this.stage.units);
+    this.fixSelection();
   }
 
-  /** 編成の選択を反映する(連れていかない部隊は地図から消える) */
-  private applyRosterChoice() {
-    if (!this.deployBase) return;
-    this.current = this.stage.budget ? applyRoster(this.deployBase, this.roster) : this.deployBase;
-    if (this.selected && !this.current.units.some((u) => u.id === this.selected)) {
-      this.selected = this.current.units.find((u) => u.side === 'blue' && u.mountedIn === null)?.id ?? null;
-    }
+  private fixSelection() {
+    if (this.selected && this.current.units.some((u) => u.id === this.selected && u.mountedIn === null)) return;
+    this.selected = this.current.units.find((u) => u.side === 'blue' && u.mountedIn === null)?.id ?? null;
   }
 
-  /** 置き直した位置を、控えも含めた全部隊の状態に写す */
+  /** 部隊を置き直す。射撃班を空いている IFV の上に置くと乗る */
   private moveInDeployment(id: string, p: Vec2) {
-    const next = deployUnit(this.current, this.stage.deployZone!, id, p);
-    if (next === this.current || !this.deployBase) return;
-    const base = this.deployBase;
-    this.deployBase = {
-      ...base,
-      units: base.units.map((u) => {
-        const n = next.units.find((x) => x.id === u.id);
-        return n && (n.id === id || n.mountedIn === id || u.mountedIn === id) ? { ...u, pos: { ...n.pos }, facing: n.facing, turret: n.turret, inBuilding: n.inBuilding } : u;
-      }),
-    };
-    this.applyRosterChoice();
+    const u = this.current.units.find((x) => x.id === id);
+    const ifv = u?.kind === 'fireteam'
+      ? this.current.units.find((v) => v.side === 'blue' && v.kind === 'ifv' && v.passengerId === null && dist(v.pos, p) < 5)
+      : undefined;
+    if (ifv) {
+      this.current = boardInDeployment(this.current, id, ifv.id);
+      this.fixSelection();
+      return;
+    }
+    this.current = deployUnit(this.current, this.stage.deployZone!, id, p);
+  }
+
+  /** 編成の変更(買う・外す・対戦車火器・IFV から降ろす) */
+  private onArmy(act: 'buy' | 'sell' | 'at' | 'leave', arg: string) {
+    const zone = this.stage.deployZone!;
+    if (act === 'buy') {
+      const r = buyUnit(this.current, arg as UnitKind, zone);
+      if (r) {
+        this.current = r.state;
+        addLabel(r.id, defaultName(arg as UnitKind, r.id));
+        this.selected = r.id;
+      }
+    } else if (act === 'sell') this.current = sellUnit(this.current, arg);
+    else if (act === 'at') this.current = setAt(this.current, arg, !(this.current.units.find((u) => u.id === arg)?.atRounds ?? 0));
+    else this.current = leaveInDeployment(this.current, arg, zone);
+    this.fixSelection();
+    this.refreshUI();
   }
 
   private rosterOk(): boolean {
-    return !this.stage.budget || !this.deployBase || rosterValid(this.deployBase, this.roster, this.stage.budget);
+    return !this.stage.budget || armyValid(this.current, this.stage.budget);
   }
 
   /** 配置完了:この配置を「やり直し」の出発点にして、計画フェイズへ */
@@ -540,16 +552,10 @@ export class App {
       renderPanel(this.panel, {
         result: null, vision: this.current.vision.blue, tick: 0, revealAll: false, mode: 'deploying', outcomeText: '',
         units: this.current.units, selected: this.selected, drafts: {}, tool: this.tool,
-        roster: this.stage.budget && this.deployBase
-          ? { budget: this.stage.budget, choice: this.roster, units: this.deployBase.units.filter((u) => u.side === 'blue'), cost: rosterCost(this.deployBase, this.roster) }
+        army: this.stage.budget
+          ? { budget: this.stage.budget, shop: this.stage.shop ?? ['fireteam'], cost: armyCost(this.current) }
           : undefined,
-        onRoster: (id, field) => {
-          const c = this.roster[id];
-          if (!c) return;
-          c[field] = !c[field];
-          this.applyRosterChoice();
-          this.refreshUI();
-        },
+        onArmy: (act, arg) => this.onArmy(act, arg),
         onSelect: (id) => { this.selected = id; this.refreshUI(); },
         onTool: () => {}, onChange: () => {}, onRetry: () => this.retry(),
       });
