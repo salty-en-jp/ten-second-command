@@ -36,3 +36,23 @@ describe('ステージ評価', () => {
     expect(e.lossRatio).toBeCloseTo(0.3);
   });
 });
+
+describe('難易度:やさしい', () => {
+  it('味方が受ける被害と制圧値が ×0.75 になる', async () => {
+    const { createState, makeFireteam, step, DEG, DIFFICULTY } = await import('../src/sim');
+    const mk = (easy: boolean) => {
+      const s = createState({ width: 200, height: 200, features: [] }, [
+        makeFireteam('b', 'blue', { x: 100, y: 50 }, 90 * DEG, { fire: 'hold' }),
+        makeFireteam('r', 'red', { x: 100, y: 120 }, -90 * DEG, { fire: 'free' }),
+      ]);
+      if (easy) s.incoming = { blue: DIFFICULTY.easy.incoming };
+      let c = s;
+      for (let i = 0; i < 20; i++) c = step(c);
+      return c.units.find((u) => u.id === 'b')!;
+    };
+    const n = mk(false);
+    const e = mk(true);
+    expect(100 - e.hp).toBeCloseTo((100 - n.hp) * 0.75, 5);
+    expect(e.suppression).toBeCloseTo(n.suppression * 0.75, 0);
+  });
+});

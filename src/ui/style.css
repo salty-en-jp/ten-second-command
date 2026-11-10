@@ -106,3 +106,5 @@ header a.back { color: var(--muted); font-size: 13px; }
 .tut-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
 .tut-tag { color: #b8d68f; font-size: 12px; }
 .tut-head button { white-space: nowrap; }
+
+.difficulty { margin: 0 0 12px; gap: 6px; align-items: center; flex-wrap: wrap; }

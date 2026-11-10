@@ -63,6 +63,7 @@ export function cloneState(s: SimState): SimState {
     nextShellId: s.nextShellId,
     impacts: s.impacts,
     wallDamage: { ...s.wallDamage },
+    incoming: s.incoming,
     defenseLine: s.defenseLine,
     ai: s.ai,
   };
@@ -826,8 +827,9 @@ export function step(state: SimState): SimState {
     u.firedOn = sp !== undefined;
     u.shelledOnly = shelled.has(u.id);
     if (sp !== undefined) {
-      u.hp -= dmg.get(u.id) ?? 0;
-      u.suppression += sp;
+      const k = s.incoming?.[u.side] ?? 1; // 難易度
+      u.hp -= (dmg.get(u.id) ?? 0) * k;
+      u.suppression += sp * k;
       if (!u.shelledOnly) {
         const sf = shotFrom.get(u.id)!;
         u.lastShotFrom = { ...sf.pos };

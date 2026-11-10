@@ -294,6 +294,13 @@ export const DEPLOY_COST = {
   at: 3,
 } as const;
 
+/**
+ * 難易度 (暫定)。やさしい:敵から受ける被害と制圧値を ×0.75、持ち点 ×1.2、目標フェイズ +3。design.md 10章
+ */
+export const DIFFICULTY = {
+  easy: { incoming: 0.75, budget: 1.2, par: 3 },
+} as const;
+
 /** 兵科ごとの基本の値 */
 export function unitStats(kind: 'fireteam' | 'sniper' | 'mortar' | 'ifv' | 'mg') {
   return kind === 'sniper' ? SNIPER : kind === 'mortar' ? MORTAR : kind === 'ifv' ? IFV : kind === 'mg' ? MG : FIRETEAM;

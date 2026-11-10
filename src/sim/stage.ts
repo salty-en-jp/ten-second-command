@@ -1,7 +1,7 @@
 import { DEG } from './config';
 import { rect } from './geometry';
 import { defaultOrders, makeUnit, mount } from './units';
-import type { MapData, Orders, Side, SimState, TerrainFeature, TerrainKind, UnitKind, Vec2 } from './types';
+import type { Decor, MapData, Orders, Side, SimState, TerrainFeature, TerrainKind, UnitKind, Vec2 } from './types';
 import { createState } from './step';
 import { applyAi, type AiPlan } from './ai';
 import { buildingAt } from './building';
@@ -51,6 +51,8 @@ export interface StageData {
   deployment?: boolean;
   /** 編成ポイントの持ち点(配置フェイズのあるミッション)。省略時は編成を選べない。ステージに書いた味方は最初の編成 */
   budget?: number;
+  /** 見た目だけの地図の書き込み(道・川・等高線) */
+  decor?: Decor[];
   /** チュートリアル:フェイズごとの「教官のメモ」(phase 0 は配置フェイズ) */
   tutorial?: Array<{ phase: number; title: string; lines: string[] }>;
   /** 編成で買える兵科 */
@@ -66,7 +68,7 @@ export function loadStage(data: StageData): SimState {
     poly: f.poly ?? (f.rect ? rect(f.rect.cx, f.rect.cy, f.rect.w, f.rect.h, (f.rect.angleDeg ?? 0) * DEG) : []),
     ...(f.enterable ? { enterable: true } : {}),
   }));
-  const map: MapData = { width: data.width, height: data.height, features };
+  const map: MapData = { width: data.width, height: data.height, features, ...(data.decor ? { decor: data.decor } : {}) };
   const units = data.units.map((u) => {
     const { facingDeg, ...rest } = u.orders ?? {};
     const orders: Orders = {

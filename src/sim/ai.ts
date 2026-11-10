@@ -133,6 +133,13 @@ export function applyAi(state: SimState, plan: AiPlan): SimState {
   if (plan.personality === 'ambush') orders = ambush(state, plan, mem, us, threats);
   else if (plan.personality === 'assault') orders = assault(state, plan, mem, us, threats);
   else orders = defense(state, plan, mem, us, threats);
+  // 機関銃:陣地では据え付け、射界は陣地の正面に向けておく(横から撃たれたら sim の中で据え直す)。FM 7-8 6204-6207
+  for (const u of us) {
+    const o = orders[u.id];
+    if (!o || u.kind !== 'mg') continue;
+    const here = plan.positions?.[u.id]?.[mem.posIndex[u.id] ?? 0];
+    orders[u.id] = { ...o, deploy: true, facing: here ? here.facingDeg * DEG : o.facing };
+  }
   return issueOrders({ ...state, ai: mem }, orders);
 }
 

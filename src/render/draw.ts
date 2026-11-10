@@ -108,6 +108,7 @@ export function drawTerrain(v: View) {
     ctx.lineTo(map.width * scale, y * scale);
     ctx.stroke();
   }
+  drawDecor(v);
   const order: TerrainKind[] = ['concealment', 'soft', 'hard', 'building'];
   for (const kind of order) {
     for (const f of map.features) {
@@ -166,6 +167,7 @@ function drawPaperTerrain(v: View) {
   for (let y = 50; y < map.height; y += 50) ctx.fillText(String(y / 10).padStart(2, '0'), 2, H - y * scale - 2);
   ctx.restore();
 
+  drawDecor(v);
   const order: TerrainKind[] = ['concealment', 'soft', 'hard', 'building'];
   for (const kind of order) {
     for (const f of map.features) {
@@ -229,6 +231,65 @@ function drawPaperTerrain(v: View) {
   ctx.textAlign = 'left';
   ctx.fillText('0', 6, y0 - 3);
   ctx.fillText('40 m', 8 + 40 * scale - 10, y0 - 3);
+  ctx.restore();
+}
+
+/** 見た目だけの書き込み:等高線、川、道、小道(地形より下に描く) */
+function drawDecor(v: View) {
+  const { ctx, scale } = v;
+  const list = v.map.decor ?? [];
+  const path = (pts: Vec2[]) => {
+    ctx.beginPath();
+    pts.forEach((p, i) => {
+      const s = toScreen(v, p);
+      if (i === 0) ctx.moveTo(s.x, s.y);
+      else ctx.lineTo(s.x, s.y);
+    });
+  };
+  ctx.save();
+  ctx.lineJoin = 'round';
+  ctx.lineCap = 'round';
+  for (const d of list.filter((x) => x.kind === 'contour')) {
+    path(d.points);
+    ctx.strokeStyle = paper() ? 'rgba(150,100,55,0.55)' : 'rgba(210,190,140,0.18)';
+    ctx.lineWidth = 1.2;
+    ctx.stroke();
+    if (d.label && d.points.length > 1) {
+      const m = toScreen(v, d.points[Math.floor(d.points.length / 2)]!);
+      ctx.fillStyle = paper() ? 'rgba(150,100,55,0.8)' : 'rgba(210,190,140,0.4)';
+      ctx.font = '9px system-ui';
+      ctx.textAlign = 'center';
+      ctx.fillText(d.label, m.x, m.y - 3);
+    }
+  }
+  for (const d of list.filter((x) => x.kind === 'river')) {
+    path(d.points);
+    ctx.strokeStyle = paper() ? '#4a7fb5' : 'rgba(90,140,190,0.7)';
+    ctx.lineWidth = (d.width ?? 8) * scale + 2;
+    ctx.stroke();
+    path(d.points);
+    ctx.strokeStyle = paper() ? '#a9cbe8' : 'rgba(70,110,150,0.8)';
+    ctx.lineWidth = (d.width ?? 8) * scale;
+    ctx.stroke();
+  }
+  for (const d of list.filter((x) => x.kind === 'road')) {
+    path(d.points);
+    ctx.strokeStyle = paper() ? '#6b5a45' : 'rgba(0,0,0,0.25)';
+    ctx.lineWidth = (d.width ?? 5) * scale + 2;
+    ctx.stroke();
+    path(d.points);
+    ctx.strokeStyle = paper() ? '#f2e3b3' : 'rgba(170,160,130,0.35)';
+    ctx.lineWidth = (d.width ?? 5) * scale;
+    ctx.stroke();
+  }
+  for (const d of list.filter((x) => x.kind === 'track')) {
+    path(d.points);
+    ctx.strokeStyle = paper() ? 'rgba(107,90,69,0.8)' : 'rgba(170,160,130,0.3)';
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([6, 4]);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
   ctx.restore();
 }
 
@@ -309,6 +370,21 @@ function drawPaperSymbol(v: View, u: Unit, p: { x: number; y: number }, r: numbe
     cross();
   }
   ctx.stroke();
+  // 規模の印(枠の上):班・チームは Ø、迫撃砲班は ●
+  if (u.kind !== 'ifv') {
+    const top = p.y - (u.side === 'blue' ? h / 2 : h * 0.95) - 5;
+    ctx.beginPath();
+    if (u.kind === 'mortar') {
+      ctx.fillStyle = INK;
+      ctx.arc(p.x, top, 1.8, 0, Math.PI * 2);
+      ctx.fill();
+    } else {
+      ctx.arc(p.x, top, 2.6, 0, Math.PI * 2);
+      ctx.moveTo(p.x - 3.6, top + 3.6);
+      ctx.lineTo(p.x + 3.6, top - 3.6);
+      ctx.stroke();
+    }
+  }
   // 兵科の文字(狙撃手 SN、機関銃 MG)
   const tag = u.kind === 'sniper' ? 'SN' : u.kind === 'mg' ? 'MG' : '';
   if (tag) {
@@ -868,7 +944,7 @@ export function drawUnit(v: View, u: Unit, opt: UnitDrawOptions = {}) {
     ctx.fillStyle = '#fff';
     ctx.font = 'bold 11px system-ui';
     ctx.textAlign = 'center';
-    ctx.fillText(opt.label, p.x, p.y - r - 7);
+    ctx.fillText(opt.label, p.x, p.y - r - (paper() ? 13 : 7));
   }
   ctx.restore();
 }

@@ -65,10 +65,22 @@ export interface TerrainFeature {
   breached?: boolean;
 }
 
+/** 見た目だけの地図の書き込み:道・小道・川・等高線(ルールには関係しない) */
+export interface Decor {
+  kind: 'road' | 'track' | 'river' | 'contour';
+  points: Vec2[];
+  /** 道・川の幅(m)。等高線では使わない */
+  width?: number;
+  /** 等高線の高さなどの文字 */
+  label?: string;
+}
+
 export interface MapData {
   width: number;
   height: number;
   features: TerrainFeature[];
+  /** 見た目だけの地図の書き込み(道・川・等高線)。sim は使わない */
+  decor?: Decor[];
   /** いま立っている煙(視線をさえぎる円)。煙は時間で変わるので、毎ティック作り直す */
   smokes?: Array<{ pos: Vec2; r: number }>;
 }
@@ -272,6 +284,8 @@ export interface SimState {
   wallDamage: Record<string, number>;
   /** 防衛線:守る側の陣営と、攻める側がこの y より手前(小さい側)に入ったら守る側の負け */
   defenseLine?: { defender: Side; y: number } | null;
+  /** 難易度:陣営ごとの、受ける被害と制圧値の倍率(省略時 1) */
+  incoming?: Partial<Record<Side, number>>;
   /** 敵 AI の記憶(フェイズをまたいで覚えておくこと) */
   ai?: AiMemory;
 }
