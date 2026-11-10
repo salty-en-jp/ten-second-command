@@ -1,0 +1,306 @@
+{
+  "id": "asase",
+  "name": "浅瀬の渡り(守る・配置あり)",
+  "description": "浅瀬の手前の農場。北の川を渡って、敵の IFV 1両と射撃班2つが攻めてくる。IFV は歩兵の後ろから撃って支える。付いて来る歩兵を先に抑え、前に出すぎた IFV を横から対戦車火器で撃とう。農場の裏(防衛線)まで入られたら負け。持ち点51で部隊を買える。",
+  "par": 14,
+  "width": 300,
+  "height": 320,
+  "deployment": true,
+  "budget": 51,
+  "shop": [
+    "fireteam",
+    "sniper",
+    "mortar"
+  ],
+  "deployZone": {
+    "x": 10,
+    "y": 22,
+    "w": 280,
+    "h": 98
+  },
+  "defenseLine": {
+    "defender": "blue",
+    "y": 18
+  },
+  "features": [
+    {
+      "id": "reeds",
+      "kind": "concealment",
+      "note": "川岸の葦(浅瀬)",
+      "rect": {
+        "cx": 150,
+        "cy": 305,
+        "w": 300,
+        "h": 20
+      }
+    },
+    {
+      "id": "hedgeW",
+      "kind": "concealment",
+      "note": "西の生け垣(見つからずに川へ近づける道)",
+      "rect": {
+        "cx": 32,
+        "cy": 200,
+        "w": 4,
+        "h": 180
+      }
+    },
+    {
+      "id": "hedgeE",
+      "kind": "concealment",
+      "note": "東の生け垣(見つからずに川へ近づける道)",
+      "rect": {
+        "cx": 268,
+        "cy": 200,
+        "w": 4,
+        "h": 180
+      }
+    },
+    {
+      "id": "hedgeM",
+      "kind": "concealment",
+      "note": "牧草地の生け垣",
+      "rect": {
+        "cx": 150,
+        "cy": 245,
+        "w": 60,
+        "h": 3
+      }
+    },
+    {
+      "id": "houseW",
+      "kind": "building",
+      "note": "農場の西の家",
+      "rect": {
+        "cx": 105,
+        "cy": 95,
+        "w": 14,
+        "h": 10
+      },
+      "enterable": true
+    },
+    {
+      "id": "houseE",
+      "kind": "building",
+      "note": "農場の東の家",
+      "rect": {
+        "cx": 195,
+        "cy": 95,
+        "w": 14,
+        "h": 10
+      },
+      "enterable": true
+    },
+    {
+      "id": "wallC",
+      "kind": "hard",
+      "note": "家の間の石垣",
+      "rect": {
+        "cx": 150,
+        "cy": 112,
+        "w": 40,
+        "h": 1
+      }
+    },
+    {
+      "id": "barn",
+      "kind": "building",
+      "note": "納屋",
+      "rect": {
+        "cx": 150,
+        "cy": 72,
+        "w": 22,
+        "h": 12
+      }
+    },
+    {
+      "id": "bankW",
+      "kind": "hard",
+      "note": "西の土手",
+      "rect": {
+        "cx": 12,
+        "cy": 160,
+        "w": 2,
+        "h": 200
+      }
+    },
+    {
+      "id": "bankE",
+      "kind": "hard",
+      "note": "東の土手",
+      "rect": {
+        "cx": 288,
+        "cy": 160,
+        "w": 2,
+        "h": 200
+      }
+    },
+    {
+      "id": "woodsS",
+      "kind": "concealment",
+      "note": "農場の裏の林",
+      "rect": {
+        "cx": 150,
+        "cy": 10,
+        "w": 300,
+        "h": 16
+      }
+    },
+    {
+      "id": "orchardE",
+      "kind": "concealment",
+      "note": "農場の東の果樹園",
+      "rect": {
+        "cx": 245,
+        "cy": 100,
+        "w": 40,
+        "h": 30
+      }
+    },
+    {
+      "id": "orchardW",
+      "kind": "concealment",
+      "note": "農場の西の果樹園",
+      "rect": {
+        "cx": 55,
+        "cy": 100,
+        "w": 40,
+        "h": 30
+      }
+    }
+  ],
+  "units": [
+    {
+      "id": "b1",
+      "name": "第1班",
+      "side": "blue",
+      "x": 105,
+      "y": 97,
+      "facingDeg": 90,
+      "at": 1
+    },
+    {
+      "id": "b2",
+      "name": "第2班",
+      "side": "blue",
+      "x": 195,
+      "y": 97,
+      "facingDeg": 90,
+      "at": 1
+    },
+    {
+      "id": "b3",
+      "name": "第3班",
+      "side": "blue",
+      "x": 245,
+      "y": 100,
+      "facingDeg": 90,
+      "at": 1
+    },
+    {
+      "id": "m1",
+      "name": "迫撃砲班",
+      "kind": "mortar",
+      "side": "blue",
+      "x": 150,
+      "y": 40,
+      "facingDeg": 90
+    },
+    {
+      "id": "r1",
+      "name": "敵A",
+      "side": "red",
+      "x": 90,
+      "y": 305,
+      "facingDeg": -90
+    },
+    {
+      "id": "r3",
+      "name": "敵C",
+      "side": "red",
+      "x": 210,
+      "y": 305,
+      "facingDeg": -90
+    },
+    {
+      "id": "rv",
+      "name": "敵IFV",
+      "kind": "ifv",
+      "side": "red",
+      "x": 160,
+      "y": 312,
+      "facingDeg": -90
+    }
+  ],
+  "ai": {
+    "personality": "assault",
+    "side": "red",
+    "advanceRoutes": {
+      "r1": [
+        {
+          "x": 90,
+          "y": 280
+        },
+        {
+          "x": 90,
+          "y": 130
+        },
+        {
+          "x": 90,
+          "y": 15
+        }
+      ],
+      "r3": [
+        {
+          "x": 210,
+          "y": 280
+        },
+        {
+          "x": 210,
+          "y": 130
+        },
+        {
+          "x": 210,
+          "y": 15
+        }
+      ],
+      "rv": [
+        {
+          "x": 160,
+          "y": 290
+        },
+        {
+          "x": 160,
+          "y": 150
+        },
+        {
+          "x": 150,
+          "y": 15
+        }
+      ]
+    },
+    "flankPoints": [
+      {
+        "x": 60,
+        "y": 115
+      },
+      {
+        "x": 240,
+        "y": 115
+      },
+      {
+        "x": 60,
+        "y": 60
+      },
+      {
+        "x": 240,
+        "y": 60
+      }
+    ]
+  },
+  "aiLabel": {
+    "name": "突撃型(IFV つき)",
+    "description": "歩兵が押さえと回り込みで攻め、IFV は後ろから撃って支える。農場の裏(防衛線)まで入られたら負け。",
+    "hint": "歩兵と IFV を切り離せ"
+  }
+}

@@ -42,6 +42,7 @@ import {
   drawUnseenFire,
   drawTracers,
   drawFireMissions,
+  drawOnCall,
   drawImpacts,
   drawIncomingWarning,
   drawMortarRange,
@@ -60,7 +61,7 @@ import { addLabel, defaultName, draftsFor, label, setLabels } from './orders';
 import { saveBest } from './storage';
 import { renderPanel, type Tool } from './panel';
 
-type Mode = 'deploying' | 'planning' | 'executing' | 'over';
+type Mode = 'deploying' | 'planning' | 'executing' | 'over' | 'replay';
 
 export class App {
   private stage: StageData;
@@ -83,6 +84,13 @@ export class App {
   private speed = 1;
   private lastTime = 0;
   private view: View;
+  /** これまでの実行フェイズの全ティック(リプレイ用) */
+  private history: SimState[] = [];
+  private paused = false;
+  /** 実行中かリプレイ中で、ティックの列を再生しているか */
+  private get playing(): boolean {
+    return (this.mode === 'executing' || this.mode === 'replay') && this.frames.length > 0;
+  }
 
   constructor(
     private canvas: HTMLCanvasElement,
@@ -243,6 +251,7 @@ export class App {
 
   /** 配置からやり直す */
   redeploy() {
+    this.history = [];
     this.startDeployment();
     this.initial = this.current;
     this.result = null;
@@ -307,6 +316,9 @@ export class App {
       const last = ms.at(-1);
       ms.push({ target: clamped, atSec: last ? Math.min(10, last.atSec + 2) : 0 });
       o.deploy = true; // 撃つには展開が必要なので、射撃を命じたら自動で展開する
+    } else if (this.tool === 'oncall') {
+      (o.onCall ??= []).push({ target: clamped, rounds: 3 });
+      o.deploy = true;
     } else if (this.tool === 'route') {
       // 入れる建物をクリック:入口まで歩いて入る(射撃班とスナイパー)
       const b = (u.kind === 'fireteam' || u.kind === 'sniper') && u.mountedIn === null ? buildingAt(this.view.map, clamped) : null;
@@ -335,6 +347,7 @@ export class App {
     if (!o) return;
     if (this.tool === 'smoke') o.smokeThrows?.pop();
     else if (this.tool === 'mortar') o.fireMissions?.pop();
+    else if (this.tool === 'oncall') o.onCall?.pop();
     else if (this.tool === 'withdraw') o.withdrawRoute.pop();
     else {
       o.route.pop();
@@ -355,6 +368,7 @@ export class App {
   }
 
   private finishPhase() {
+    this.history.push(...this.frames);
     this.current = this.frames.at(-1)!;
     if (this.current.outcome === 'ongoing') this.current = planAi(this.current, this.stage);
     this.frames = [];
@@ -373,7 +387,24 @@ export class App {
     this.refreshUI();
   }
 
+  /** リプレイ:最初から最後までを、敵も全部見える状態で見返す */
+  startReplay() {
+    if (this.history.length === 0) return;
+    this.frames = this.history;
+    this.playTick = 0;
+    this.paused = false;
+    this.mode = 'replay';
+    this.refreshUI();
+  }
+
+  endReplay() {
+    this.frames = [];
+    this.mode = 'over';
+    this.refreshUI();
+  }
+
   retry() {
+    this.history = [];
     this.current = planAi(this.initial, this.stage);
     this.result = null;
     this.drafts = draftsFor(this.current);
@@ -390,6 +421,11 @@ export class App {
   private loop(t: number) {
     const dt = this.lastTime ? Math.min(0.1, (t - this.lastTime) / 1000) : 0;
     this.lastTime = t;
+    if (this.mode === 'replay') {
+      if (!this.paused) this.playTick = Math.min(this.frames.length - 1, this.playTick + dt * TICKS_PER_SECOND * this.speed);
+      this.updateTimeText();
+      this.renderPanel();
+    }
     if (this.mode === 'executing') {
       this.playTick += dt * TICKS_PER_SECOND * this.speed;
       if (this.playTick >= PHASE_TICKS) {
@@ -422,7 +458,7 @@ export class App {
     const v = this.view;
     v.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
     // 地形は状態の中にある(壁が崩れる、車両の残骸が増えるため)
-    const terrainFrame = this.mode === 'executing' && this.frames.length > 0 ? this.frames[Math.min(Math.floor(this.playTick) + 1, this.frames.length - 1)]! : this.current;
+    const terrainFrame = this.playing ? this.frames[Math.min(Math.floor(this.playTick) + 1, this.frames.length - 1)]! : this.current;
     v.map = terrainFrame.map;
     drawTerrain(v);
     if (this.mode === 'deploying' || (this.mode === 'planning' && this.phase === 1)) drawDeployZone(v, this.stage.deployZone, this.mode === 'deploying');
@@ -430,7 +466,7 @@ export class App {
 
     let units: Unit[];
     let frame: SimState = this.current;
-    if (this.mode === 'executing' && this.frames.length > 0) {
+    if (this.playing) {
       const i = Math.floor(this.playTick);
       const a = this.frames[Math.min(i, this.frames.length - 1)]!;
       const b = this.frames[Math.min(i + 1, this.frames.length - 1)]!;
@@ -442,8 +478,9 @@ export class App {
 
     // 視界:味方から見えている敵だけを描く(倒れた敵は、倒したことがわかるので描く)
     const vis = new Set(frame.vision.blue.visible);
-    const shown = (u: Unit) => u.mountedIn === null && (u.side === 'blue' || this.revealAll || vis.has(u.id) || !u.alive);
-    if (!this.revealAll) {
+    const reveal = this.revealAll || this.mode === 'replay';
+    const shown = (u: Unit) => u.mountedIn === null && (u.side === 'blue' || reveal || vis.has(u.id) || !u.alive);
+    if (!reveal) {
       for (const [id, ls] of Object.entries(frame.vision.blue.lastSeen)) {
         if (vis.has(id)) continue;
         drawLastSeen(v, 'red', ls.pos, (frame.tick - ls.tick) / TICKS_PER_SECOND, label({ id }));
@@ -484,6 +521,7 @@ export class App {
         if (u.kind !== 'mortar' || !o) continue;
         if (u.id === this.selected) drawMortarRange(v, u);
         drawFireMissions(v, u, o.fireMissions ?? []);
+        drawOnCall(v, o.onCall ?? []);
       }
     }
     // 敵の弾の飛翔音:着弾 0.5 秒前から、近くの味方に表示
@@ -500,7 +538,7 @@ export class App {
       drawUnit(v, u, {
         selected: (this.mode === 'planning' || this.mode === 'deploying') && u.id === this.selected,
         label: label(u),
-        showArc: u.alive && (u.side === 'red' || u.id === this.selected || this.mode === 'executing'),
+        showArc: u.alive && (u.side === 'red' || u.id === this.selected || this.playing),
         arcCenter: this.mode === 'planning' ? (this.drafts[u.id]?.facing ?? undefined) : undefined,
         showSight:
           u.alive &&
@@ -522,6 +560,12 @@ export class App {
 
   private updateTimeText() {
     const el = this.timeline.querySelector('.time');
+    if (this.mode === 'replay') {
+      if (el) el.textContent = `フェイズ ${Math.floor(this.playTick / (PHASE_TICKS + 1)) + 1}  ${((this.playTick % (PHASE_TICKS + 1)) / TICKS_PER_SECOND).toFixed(1)} 秒`;
+      const sl = this.timeline.querySelector<HTMLInputElement>('input[type=range]');
+      if (sl) sl.value = String(Math.floor(this.playTick));
+      return;
+    }
     const tick = this.mode === 'executing' ? this.playTick : this.scrubTick;
     if (el) el.textContent = `${(tick / TICKS_PER_SECOND).toFixed(1)} / ${PHASE_SECONDS.toFixed(1)} 秒`;
     const slider = this.timeline.querySelector<HTMLInputElement>('input[type=range]');
@@ -544,6 +588,36 @@ export class App {
 
     // タイムライン
     const planning = this.mode === 'planning';
+    if (this.mode === 'replay') {
+      this.status.textContent = 'リプレイ(敵も全部見えています)';
+      this.timeline.innerHTML = `
+        <button class="primary" data-act="pause">${this.paused ? '▶ 再生' : '❚❚ 一時停止'}</button>
+        <input type="range" min="0" max="${this.frames.length - 1}" step="1" value="${Math.floor(this.playTick)}" title="リプレイの位置" />
+        <span class="time"></span>
+        <span class="row">${[1, 2, 4, 8].map((x) => `<button data-speed="${x}" class="${this.speed === x ? 'on' : ''}">×${x}</button>`).join('')}</span>
+        <button data-act="endReplay">✕ 結果に戻る</button>`;
+      this.updateTimeText();
+      this.timeline.querySelector('[data-act=pause]')?.addEventListener('click', () => {
+        if (this.playTick >= this.frames.length - 1) this.playTick = 0;
+        this.paused = !this.paused;
+        this.refreshUI();
+      });
+      this.timeline.querySelector('[data-act=endReplay]')?.addEventListener('click', () => this.endReplay());
+      this.timeline.querySelectorAll<HTMLButtonElement>('[data-speed]').forEach((b) =>
+        b.addEventListener('click', () => {
+          this.speed = Number(b.dataset.speed);
+          this.refreshUI();
+        }),
+      );
+      this.timeline.querySelector<HTMLInputElement>('input[type=range]')?.addEventListener('input', (e) => {
+        this.playTick = Number((e.target as HTMLInputElement).value);
+        this.paused = true;
+        this.updateTimeText();
+        this.renderPanel();
+      });
+      this.renderPanel();
+      return;
+    }
     if (this.mode === 'deploying') {
       this.timeline.innerHTML = `<button class="primary" data-act="deployed" ${this.rosterOk() ? '' : 'disabled'}>✔ 配置完了(計画フェイズへ)</button>
         <span class="hint">部隊を点線の配置エリアの中でドラッグして置いてください(スマホは、部隊をタップしてから置きたい場所をタップ)。置いた場所から見える敵だけが表示されます。</span>`;
@@ -608,13 +682,13 @@ export class App {
   private panelTick = -1;
   private renderPanel() {
     // 実行中は5ティックごとに更新(毎フレームだと重い)
-    if (this.mode === 'executing') {
+    if (this.mode === 'executing' || this.mode === 'replay') {
       const t = Math.floor(this.playTick / 5);
       if (t === this.panelTick) return;
       this.panelTick = t;
     }
     let frame = this.current;
-    if (this.mode === 'executing' && this.frames.length > 0) {
+    if (this.playing) {
       frame = this.frames[Math.min(Math.floor(this.playTick), this.frames.length - 1)]!;
     }
     const units = frame.units;
@@ -630,8 +704,9 @@ export class App {
       onRedeploy: () => this.redeploy(),
       vision: frame.vision.blue,
       tick: frame.tick,
-      revealAll: this.revealAll,
-      mode: this.mode,
+      revealAll: this.revealAll || this.mode === 'replay',
+      mode: this.mode === 'replay' ? 'executing' : this.mode,
+      onReplay: this.history.length > 0 ? () => this.startReplay() : undefined,
       outcomeText,
       units,
       selected: this.selected,

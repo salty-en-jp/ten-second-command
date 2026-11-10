@@ -103,6 +103,9 @@ export const MORTAR = {
   /** 飛翔音の予兆:着弾のこの秒数前に、着弾点からこの半径以内のユニットが伏せる */
   warningSec: 0.5,
   warningRadius: 15,
+  /** 待機射撃:登録した地点からこの半径(m)以内に味方が敵を見つけたら撃つ。1地点の弾数の上限 */
+  onCallRadius: 15,
+  onCallMaxRounds: 4,
   /** 自衛の小銃射撃の火力(射撃班に対する倍率)。撃つのは有効射程(100 m)の中の敵だけ */
   smallArmsFactor: 0.5,
 } as const;

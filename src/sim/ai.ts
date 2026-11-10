@@ -51,6 +51,8 @@ export const AI = {
   counterRange: 60,
   /** この距離より遠い敵からは見えないものとして回り込み点を選ぶ(m) */
   hiddenBeyond: 130,
+  /** 突撃型の IFV:歩兵よりこの距離(m)だけ後ろを進む */
+  ifvBehind: 20,
   /** 2人を失った班は下がる(防御型は1人になるまで残る) */
   retreatHp: 50,
   defenseRetreatHp: 25,
@@ -209,7 +211,21 @@ function ambush(state: SimState, plan: AiPlan, mem: AiMemory, us: Unit[], threat
  */
 function assault(state: SimState, plan: AiPlan, mem: AiMemory, us: Unit[], threats: Threat[]): Record<string, Orders> {
   const out: Record<string, Orders> = {};
+  // IFV は回り込まない:歩兵の後ろから進み、敵を見つけたら止まって撃つ(押さえ役)。FM 7-7J、FM 90-10-1
+  const ifvs = us.filter((u) => u.kind === 'ifv');
+  const allUs = us;
+  us = us.filter((u) => u.kind !== 'ifv');
   if (threats.length === 0) {
+    for (const v of ifvs) {
+      const route = plan.advanceRoutes?.[v.id] ?? [];
+      const goal = route.at(-1);
+      // 一番前の歩兵より ifvBehind だけ後ろにいるまで進む(歩兵がいなければそのまま進む)
+      const lead = goal ? Math.min(...us.map((u) => dist(u.pos, goal))) : Infinity;
+      const ahead = goal !== undefined && us.length > 0 && dist(v.pos, goal) < lead + AI.ifvBehind;
+      let i = 0;
+      while (i < route.length && dist(v.pos, route[i]!) < 3) i++;
+      out[v.id] = O({ route: ahead ? [] : route.slice(i).map(wp), policy: 'hold', fire: 'free' });
+    }
     for (const u of us) {
       const route = plan.advanceRoutes?.[u.id] ?? [];
       // 道のどこから進み直すか:今いる場所から終点までの道のりが一番短くなる点(脇道にそれていても戻りすぎない)
@@ -230,8 +246,11 @@ function assault(state: SimState, plan: AiPlan, mem: AiMemory, us: Unit[], threa
     }
     return out;
   }
-  const center = { x: us.reduce((a, u) => a + u.pos.x, 0) / Math.max(1, us.length), y: us.reduce((a, u) => a + u.pos.y, 0) / Math.max(1, us.length) };
+  const center = { x: allUs.reduce((a, u) => a + u.pos.x, 0) / Math.max(1, allUs.length), y: allUs.reduce((a, u) => a + u.pos.y, 0) / Math.max(1, allUs.length) };
   const target = threats.slice().sort(byDistThenId(center))[0]!;
+  for (const v of ifvs) {
+    out[v.id] = O({ policy: 'hold', fire: 'free', focusTargetId: target.visible ? target.id : null, facing: angleTo(v.pos, target.pos) });
+  }
   const stalled = us.some((u) => mem.flanking[u.id] && (u.suppression >= 70 || u.hp <= AI.retreatHp));
   const canSee = (u: Unit) => dist(u.pos, target.pos) <= 150 && lineOfFire(state.map, u.pos, target.pos);
   const fixer = us.filter((u) => !mem.flanking[u.id]).sort((a, b) => Number(canSee(b)) - Number(canSee(a)) || dist(a.pos, target.pos) - dist(b.pos, target.pos) || (a.id < b.id ? -1 : 1))[0];

@@ -4,7 +4,7 @@ import { label } from './orders';
 import { starText } from './storage';
 import type { Evaluation } from '../sim';
 
-export type Tool = 'route' | 'withdraw' | 'facing' | 'focus' | 'mortar' | 'smoke';
+export type Tool = 'route' | 'withdraw' | 'facing' | 'focus' | 'mortar' | 'oncall' | 'smoke';
 
 interface PanelProps {
   result: { ev: Evaluation; best: number } | null;
@@ -23,6 +23,8 @@ interface PanelProps {
   onTool(t: Tool): void;
   onChange(): void;
   onRetry(): void;
+  /** 勝敗がついたあとのリプレイ */
+  onReplay?(): void;
   /** 配置フェイズの編成(編成ポイント制のミッションだけ) */
   army?: { budget: number; shop: Array<Unit['kind']>; cost: number };
   onArmy?(act: 'buy' | 'sell' | 'at' | 'leave', arg: string): void;
@@ -85,7 +87,7 @@ export function renderPanel(el: HTMLElement, p: PanelProps) {
            このミッションの最高:${starText(r.best)}</div>
            <div class="hint">★1 勝利 / ★2 目標フェイズ以内 / ★3 さらに全滅した班なし・失った耐久30%以下</div>`
         : '';
-    html += `<div class="overlay">${p.outcomeText}${evalHtml}<div class="row" style="justify-content:center"><button class="primary" data-act="retry">同じ配置からやり直す</button>${p.canRedeploy ? '<button data-act="redeploy">配置からやり直す</button>' : ''}<a href="#"><button>ミッション選択へ</button></a></div></div>`;
+    html += `<div class="overlay">${p.outcomeText}${evalHtml}<div class="row" style="justify-content:center">${p.onReplay ? '<button data-act="replay">▶ リプレイを見る(敵も見える)</button>' : ''}<button class="primary" data-act="retry">同じ配置からやり直す</button>${p.canRedeploy ? '<button data-act="redeploy">配置からやり直す</button>' : ''}<a href="#"><button>ミッション選択へ</button></a></div></div>`;
   }
   html += `<div class="group"><h3>部隊の状態</h3>${[...blue, ...red].map(status).join('')}</div>`;
 
@@ -103,6 +105,7 @@ export function renderPanel(el: HTMLElement, p: PanelProps) {
           ${btn('data-tool="withdraw"', '離脱経路', p.tool === 'withdraw')}
           ${btn('data-tool="focus"', '撃つ敵を指定', p.tool === 'focus')}
           ${u.kind === 'mortar' ? btn('data-tool="mortar"', '迫撃砲の射撃', p.tool === 'mortar') : ''}
+          ${u.kind === 'mortar' ? btn('data-tool="oncall"', '待機射撃', p.tool === 'oncall') : ''}
           ${u.kind === 'fireteam' && u.mountedIn === null ? btn('data-tool="smoke"', `発煙手榴弾(${u.smokeGrenades}個)`, p.tool === 'smoke') : ''}
         </div>
         <div class="hint">${
@@ -110,6 +113,7 @@ export function renderPanel(el: HTMLElement, p: PanelProps) {
           : p.tool === 'facing' ? (u.kind === 'sniper' ? '撃つ方向をクリックします。黄色い細い扇形(幅30°)の中に入った敵だけを撃ちます。' : '向かせたい方向をクリックします(経路の終点から)。')
           : p.tool === 'withdraw' ? '「離脱」のときに下がる経路をクリックで足します。右クリックで消します。'
           : p.tool === 'smoke' ? `煙を立てたい場所をクリックします(${SMOKE.grenade.throwRange} m まで。1回で1個)。投げて${SMOKE.grenade.delaySec}秒で半径${SMOKE.grenade.radius} mの煙が立ち、${SMOKE.grenade.durationSec}秒続きます。煙は視線をさえぎりますが、弾は通ります。自分たちも煙の向こうは見えません。右クリックで最後の1個を取り消し。`
+          : p.tool === 'oncall' ? `敵が来そうな場所をクリックして登録します(自動で「展開する」になります)。実行中に味方のだれかが、その地点から${MORTAR.onCallRadius} m以内に敵を見つけたら、登録した数だけ撃ちます。予め測ってある地点なので、最初の1発から正確に落ちます。撃った地点は消え、撃つまではフェイズをまたいで残ります。右クリックで最後の地点を取り消し。`
           : p.tool === 'mortar' ? `着弾させたい場所をクリックします(1回で1発、2秒おき。自動で「展開する」になります)。射程は${MORTAR.minRange}〜${MORTAR.maxRange} m、発射から${MORTAR.flightSec}秒で着弾。味方のだれかがその場所を見ていないと、遠くへずれます(点線の矢印)。右クリックで最後の1発を取り消し。`
           : '集中して撃つ敵をクリックします。もう一度クリックで解除。'
         }</div>
@@ -136,6 +140,9 @@ export function renderPanel(el: HTMLElement, p: PanelProps) {
         <div class="hint">展開に${MORTAR.deploySec}秒、動くには撤収に${MORTAR.packSec}秒かかります。経路が残っているときは、着いてから展開します。残弾 ${u.rounds}/${MORTAR.rounds}(撃つのは「実行」の間です)。</div>
         ${(o.fireMissions ?? []).length > 0 && !o.deploy ? '<div class="hint" style="color:#ff9f43">⚠ 「展開しない」になっているので撃てません。「展開する」を押してください。</div>' : ''}
         ${(o.fireMissions ?? []).length > 0 && o.deploy && u.mortarState !== 'deployed' && o.route.length === 0 ? `<div class="hint" style="color:#ffe07a">展開に${MORTAR.deploySec}秒かかるので、最初の1発は${MORTAR.deploySec}秒後からになります。</div>` : ''}
+        ${(o.onCall ?? []).length > 0 ? `<div class="hint">待機射撃の地点</div><ol class="wps">${(o.onCall ?? [])
+          .map((t, i) => `<li>地点${i + 1}<input type="number" min="1" max="${MORTAR.onCallMaxRounds}" step="1" value="${t.rounds}" data-ocr="${i}" />発 <button data-delonc="${i}">消す</button></li>`)
+          .join('')}</ol>` : ''}
         ${(o.fireMissions ?? []).length === 0 ? '<div class="hint">射撃命令なし(「迫撃砲の射撃」で地図をクリック)</div>' : `<ol class="wps">${(o.fireMissions ?? [])
           .map((m, i) => `<li>${i + 1}発目<input type="number" min="0" max="10" step="1" value="${m.atSec}" data-at="${i}" />秒に <button data-mkind="${i}">${m.kind === 'smoke' ? '発煙弾' : '榴弾'}</button> <button data-delmission="${i}">消す</button></li>`)
           .join('')}</ol>`}
@@ -221,6 +228,7 @@ export function renderPanel(el: HTMLElement, p: PanelProps) {
   el.innerHTML = html;
 
   el.querySelector('[data-act=retry]')?.addEventListener('click', p.onRetry);
+  el.querySelector('[data-act=replay]')?.addEventListener('click', () => p.onReplay?.());
   el.querySelector('[data-act=redeploy]')?.addEventListener('click', () => p.onRedeploy?.());
   el.querySelectorAll<HTMLElement>('[data-sel]').forEach((b) => b.addEventListener('click', () => p.onSelect(b.dataset.sel!)));
   el.querySelectorAll<HTMLElement>('[data-tool]').forEach((b) => b.addEventListener('click', () => p.onTool(b.dataset.tool as Tool)));
@@ -248,6 +256,14 @@ export function renderPanel(el: HTMLElement, p: PanelProps) {
   on('[data-atuse]', (b) => (o.atAllowed = b.dataset.atuse === '1'));
   on('[data-delmission]', (b) => o.fireMissions?.splice(Number(b.dataset.delmission), 1));
   on('[data-delsmoke]', (b) => o.smokeThrows?.splice(Number(b.dataset.delsmoke), 1));
+  on('[data-delonc]', (b) => o.onCall?.splice(Number(b.dataset.delonc), 1));
+  el.querySelectorAll<HTMLInputElement>('[data-ocr]').forEach((inp) =>
+    inp.addEventListener('change', () => {
+      const t = o.onCall?.[Number(inp.dataset.ocr)];
+      if (t) t.rounds = Math.max(1, Math.min(MORTAR.onCallMaxRounds, Math.round(Number(inp.value) || 1)));
+      p.onChange();
+    }),
+  );
   on('[data-mkind]', (b) => {
     const m = o.fireMissions?.[Number(b.dataset.mkind)];
     if (!m) return;
