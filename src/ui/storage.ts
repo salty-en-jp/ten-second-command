@@ -23,3 +23,19 @@ export function saveBest(id: string | undefined, stars: number): number {
 }
 
 export const starText = (n: number) => '★'.repeat(n) + '☆'.repeat(3 - n);
+
+/** 地図の描き方(作戦地図/戦術図)をブラウザに覚えておく */
+export function loadMapStyle(): 'paper' | 'tactical' {
+  try {
+    return localStorage.getItem('tsc.mapStyle') === 'tactical' ? 'tactical' : 'paper';
+  } catch {
+    return 'paper';
+  }
+}
+export function saveMapStyle(m: 'paper' | 'tactical') {
+  try {
+    localStorage.setItem('tsc.mapStyle', m);
+  } catch {
+    /* 保存できなくても遊べる */
+  }
+}

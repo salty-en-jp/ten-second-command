@@ -52,13 +52,17 @@ import {
   drawOrders,
   drawShots,
   drawTerrain,
+  installTextHalo,
+  mapStyle,
+  setMapStyle,
+  type MapStyle,
   drawUnit,
   interpolate,
   toWorld,
   type View,
 } from '../render/draw';
 import { addLabel, defaultName, draftsFor, label, setLabels } from './orders';
-import { saveBest } from './storage';
+import { loadMapStyle, saveBest, saveMapStyle } from './storage';
 import { renderPanel, type Tool } from './panel';
 
 type Mode = 'deploying' | 'planning' | 'executing' | 'over' | 'replay';
@@ -128,6 +132,8 @@ export class App {
     this.drafts = draftsFor(this.current);
     const ctx = canvas.getContext('2d')!;
     this.view = { ctx, scale: 1, map: this.initial.map };
+    installTextHalo(ctx);
+    setMapStyle(loadMapStyle());
     new ResizeObserver(() => this.resize()).observe(canvas);
     canvas.addEventListener('pointerdown', (e) => this.onPointer(e));
     canvas.addEventListener('pointermove', (e) => this.onDeployMove(e));
@@ -677,6 +683,21 @@ export class App {
       `<span class="row">視界:${(['selected', 'all', 'none'] as const)
         .map((m) => `<button data-sight="${m}" class="${this.showSight === m ? 'on' : ''}">${{ selected: '選んだ班と敵', all: '全部', none: '隠す' }[m]}</button>`)
         .join('')}</span>`,
+    );
+    this.timeline.insertAdjacentHTML(
+      'beforeend',
+      `<span class="row">地図:${(['paper', 'tactical'] as const)
+        .map((m) => `<button data-mapstyle="${m}" class="${mapStyle() === m ? 'on' : ''}">${{ paper: '作戦地図', tactical: '戦術図' }[m]}</button>`)
+        .join('')}</span>`,
+    );
+    this.timeline.querySelectorAll<HTMLButtonElement>('[data-mapstyle]').forEach((b) =>
+      b.addEventListener('click', () => {
+        const m = b.dataset.mapstyle as MapStyle;
+        setMapStyle(m);
+        saveMapStyle(m);
+        this.refreshUI();
+        this.draw();
+      }),
     );
     this.timeline.insertAdjacentHTML(
       'beforeend',

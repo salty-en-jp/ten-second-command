@@ -23,7 +23,59 @@ const TERRAIN_STYLE: Record<TerrainKind, { fill: string; stroke: string }> = {
   building: { fill: '#5b3d34', stroke: '#2b1d18' },
 };
 
-export const SIDE_COLOR = { blue: '#5aa9ff', red: '#ff6b5a' } as const;
+/** 地図の描き方:作戦地図(紙の地図と部隊記号)/戦術図(これまでの表示) */
+export type MapStyle = 'paper' | 'tactical';
+let STYLE: MapStyle = 'paper';
+export function setMapStyle(s: MapStyle) {
+  STYLE = s;
+}
+export const mapStyle = () => STYLE;
+const paper = () => STYLE === 'paper';
+
+const TACTICAL_SIDE = { blue: '#5aa9ff', red: '#ff6b5a' } as const;
+const PAPER_SIDE = { blue: '#1f5fbf', red: '#c0392b' } as const;
+/** 陣営の色(描き方で変わる) */
+export const SIDE_COLOR = new Proxy({} as Record<'blue' | 'red', string>, {
+  get: (_t, k: 'blue' | 'red') => (paper() ? PAPER_SIDE : TACTICAL_SIDE)[k],
+});
+/** 紙の地図のインク */
+const INK = '#2a241c';
+
+/**
+ * 作戦地図では、明るい色の文字のまわりに濃いふちを付けて、紙の上でも読めるようにする。
+ * Canvas の fillText を一度だけ包む(描くだけで、状態には触れない)。
+ */
+function isLight(style: string | CanvasGradient | CanvasPattern): boolean {
+  if (typeof style !== 'string') return false;
+  let r = 0;
+  let g = 0;
+  let b = 0;
+  if (style.startsWith('#')) {
+    const h = style.length === 4 ? style.slice(1).split('').map((c) => c + c).join('') : style.slice(1, 7);
+    [r, g, b] = [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16)) as [number, number, number];
+  } else {
+    const m = style.match(/\d+(\.\d+)?/g);
+    if (!m) return false;
+    [r = 0, g = 0, b = 0] = m.map(Number);
+  }
+  return 0.299 * r + 0.587 * g + 0.114 * b > 150;
+}
+
+export function installTextHalo(ctx: CanvasRenderingContext2D) {
+  const orig = ctx.fillText.bind(ctx);
+  ctx.fillText = (text: string, x: number, y: number, maxWidth?: number) => {
+    if (paper() && isLight(ctx.fillStyle)) {
+      ctx.save();
+      ctx.strokeStyle = 'rgba(40,32,22,0.85)';
+      ctx.lineWidth = 3;
+      ctx.lineJoin = 'round';
+      ctx.setLineDash([]);
+      ctx.strokeText(text, x, y, maxWidth);
+      ctx.restore();
+    }
+    orig(text, x, y, maxWidth);
+  };
+}
 
 function poly(v: View, pts: Vec2[]) {
   const { ctx } = v;
@@ -37,6 +89,7 @@ function poly(v: View, pts: Vec2[]) {
 }
 
 export function drawTerrain(v: View) {
+  if (paper()) return drawPaperTerrain(v);
   const { ctx, map, scale } = v;
   ctx.fillStyle = '#56653f';
   ctx.fillRect(0, 0, map.width * scale, map.height * scale);
@@ -83,6 +136,197 @@ export function drawTerrain(v: View) {
   ctx.fillText('20 m', 10, map.height * scale - 14);
 }
 
+/** 作戦地図風の地形:紙の色、インクの格子、木の記号、黒い建物 */
+function drawPaperTerrain(v: View) {
+  const { ctx, map, scale } = v;
+  const W = map.width * scale;
+  const H = map.height * scale;
+  ctx.fillStyle = '#e9e1c9';
+  ctx.fillRect(0, 0, W, H);
+  // 10 m の細い格子と、50 m ごとの太い格子(番号つき)
+  for (let x = 0; x <= map.width; x += 10) {
+    ctx.strokeStyle = x % 50 === 0 ? 'rgba(70,55,30,0.28)' : 'rgba(70,55,30,0.08)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(x * scale, 0);
+    ctx.lineTo(x * scale, H);
+    ctx.stroke();
+  }
+  for (let y = 0; y <= map.height; y += 10) {
+    ctx.strokeStyle = y % 50 === 0 ? 'rgba(70,55,30,0.28)' : 'rgba(70,55,30,0.08)';
+    ctx.beginPath();
+    ctx.moveTo(0, H - y * scale);
+    ctx.lineTo(W, H - y * scale);
+    ctx.stroke();
+  }
+  ctx.save();
+  ctx.fillStyle = 'rgba(70,55,30,0.55)';
+  ctx.font = '9px system-ui';
+  for (let x = 50; x < map.width; x += 50) ctx.fillText(String(x / 10).padStart(2, '0'), x * scale + 2, 10);
+  for (let y = 50; y < map.height; y += 50) ctx.fillText(String(y / 10).padStart(2, '0'), 2, H - y * scale - 2);
+  ctx.restore();
+
+  const order: TerrainKind[] = ['concealment', 'soft', 'hard', 'building'];
+  for (const kind of order) {
+    for (const f of map.features) {
+      if (f.kind !== kind) continue;
+      poly(v, f.poly);
+      if (kind === 'concealment') {
+        ctx.fillStyle = 'rgba(112,152,84,0.32)';
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(80,118,58,0.8)';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+        drawTrees(v, f.poly);
+      } else if (kind === 'soft') {
+        ctx.fillStyle = 'rgba(150,110,62,0.45)';
+        ctx.fill();
+        ctx.strokeStyle = '#7a5530';
+        ctx.lineWidth = 1.2;
+        ctx.setLineDash([3, 2]);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      } else if (kind === 'hard') {
+        ctx.fillStyle = '#5c4a36';
+        ctx.fill();
+        ctx.strokeStyle = '#2f261b';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+      } else {
+        ctx.fillStyle = f.enterable ? '#9a8a74' : '#3f3a35';
+        ctx.fill();
+        ctx.strokeStyle = '#1e1b18';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+        if (f.enterable) drawEnterable(v, f.poly, !!f.breached);
+      }
+    }
+  }
+  // 方位記号と縮尺(白黒交互の物差し)
+  ctx.save();
+  const nx = W - 18;
+  ctx.fillStyle = INK;
+  ctx.beginPath();
+  ctx.moveTo(nx, 6);
+  ctx.lineTo(nx + 6, 24);
+  ctx.lineTo(nx, 19);
+  ctx.lineTo(nx - 6, 24);
+  ctx.closePath();
+  ctx.fill();
+  ctx.font = 'bold 11px system-ui';
+  ctx.textAlign = 'center';
+  ctx.fillText('N', nx, 36);
+  const y0 = H - 12;
+  for (let i = 0; i < 4; i++) {
+    ctx.fillStyle = i % 2 === 0 ? INK : '#f4eedc';
+    ctx.fillRect(8 + i * 10 * scale, y0, 10 * scale, 4);
+  }
+  ctx.strokeStyle = INK;
+  ctx.lineWidth = 1;
+  ctx.strokeRect(8, y0, 40 * scale, 4);
+  ctx.fillStyle = INK;
+  ctx.font = '10px system-ui';
+  ctx.textAlign = 'left';
+  ctx.fillText('0', 6, y0 - 3);
+  ctx.fillText('40 m', 8 + 40 * scale - 10, y0 - 3);
+  ctx.restore();
+}
+
+/** 茂み・林の木の記号(小さな丸を並べる) */
+function drawTrees(v: View, pts: Vec2[]) {
+  const { ctx, scale } = v;
+  const xs = pts.map((p) => p.x);
+  const ys = pts.map((p) => p.y);
+  const [x0, x1, y0, y1] = [Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys)];
+  ctx.save();
+  poly(v, pts);
+  ctx.clip();
+  ctx.strokeStyle = 'rgba(70,108,50,0.75)';
+  ctx.lineWidth = 1;
+  const step = 7;
+  const thin = Math.min(x1 - x0, y1 - y0) < 6;
+  for (let y = y0 + (thin ? (y1 - y0) / 2 : step / 2), row = 0; y <= y1; y += step, row++) {
+    for (let x = x0 + (thin ? (x1 - x0) / 2 : (row % 2 ? step : step / 2)); x <= x1; x += step) {
+      const s = toScreen(v, { x, y });
+      ctx.beginPath();
+      ctx.arc(s.x, s.y, Math.max(1.5, 1.4 * scale), 0, Math.PI * 2);
+      ctx.stroke();
+      if (thin && x1 - x0 < 6) break;
+    }
+    if (thin && y1 - y0 < 6) break;
+  }
+  ctx.restore();
+}
+
+/** 作戦地図の部隊記号(NATO 式):味方は長方形、敵はひし形。中の記号が兵科 */
+function drawPaperSymbol(v: View, u: Unit, p: { x: number; y: number }, r: number) {
+  const { ctx } = v;
+  const w = r * 2.6;
+  const h = r * 1.8;
+  ctx.save();
+  ctx.lineWidth = 1.5;
+  ctx.strokeStyle = INK;
+  ctx.fillStyle = u.side === 'blue' ? '#a9c9ef' : '#f2aaa0';
+  ctx.beginPath();
+  if (u.side === 'blue') ctx.rect(p.x - w / 2, p.y - h / 2, w, h);
+  else {
+    const d = h * 0.95;
+    ctx.moveTo(p.x, p.y - d);
+    ctx.lineTo(p.x + d, p.y);
+    ctx.lineTo(p.x, p.y + d);
+    ctx.lineTo(p.x - d, p.y);
+    ctx.closePath();
+  }
+  ctx.fill();
+  ctx.stroke();
+  // 枠の内側の四角(記号を描く場所)
+  const iw = u.side === 'blue' ? w / 2 : h * 0.48;
+  const ih = u.side === 'blue' ? h / 2 : h * 0.48;
+  ctx.beginPath();
+  const cross = () => {
+    ctx.moveTo(p.x - iw, p.y - ih);
+    ctx.lineTo(p.x + iw, p.y + ih);
+    ctx.moveTo(p.x + iw, p.y - ih);
+    ctx.lineTo(p.x - iw, p.y + ih);
+  };
+  if (u.kind === 'mortar') {
+    // 迫撃砲:上向きの矢印と、下の小さな丸
+    ctx.moveTo(p.x, p.y + ih * 0.5);
+    ctx.lineTo(p.x, p.y - ih * 0.9);
+    ctx.moveTo(p.x - ih * 0.45, p.y - ih * 0.45);
+    ctx.lineTo(p.x, p.y - ih * 0.9);
+    ctx.lineTo(p.x + ih * 0.45, p.y - ih * 0.45);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(p.x, p.y + ih * 0.7, ih * 0.22, 0, Math.PI * 2);
+  } else if (u.kind === 'ifv') {
+    // 機械化歩兵:×と、装軌を表す楕円
+    cross();
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.ellipse(p.x, p.y, iw * 0.7, ih * 0.6, 0, 0, Math.PI * 2);
+  } else {
+    cross();
+  }
+  ctx.stroke();
+  // 兵科の文字(狙撃手 SN、機関銃 MG)
+  const tag = u.kind === 'sniper' ? 'SN' : u.kind === 'mg' ? 'MG' : '';
+  if (tag) {
+    ctx.fillStyle = INK;
+    ctx.font = 'bold 8px system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillText(tag, p.x + w / 2 + 2, p.y + 3);
+  }
+  // 伏せているときは枠の下に線
+  if (u.prone) {
+    ctx.beginPath();
+    ctx.moveTo(p.x - w / 2, p.y + h / 2 + 2);
+    ctx.lineTo(p.x + w / 2, p.y + h / 2 + 2);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
 /** 入れる建物:内側に窓の点線。突破口が開いたら外周をオレンジの破線で示す */
 function drawEnterable(v: View, pts: Vec2[], breached: boolean) {
   const { ctx } = v;
@@ -93,7 +337,7 @@ function drawEnterable(v: View, pts: Vec2[], breached: boolean) {
   });
   ctx.save();
   poly(v, inner);
-  ctx.strokeStyle = 'rgba(255,230,180,0.75)';
+  ctx.strokeStyle = paper() ? '#f6efdc' : 'rgba(255,230,180,0.75)';
   ctx.lineWidth = 1.5;
   ctx.setLineDash([3, 4]);
   ctx.stroke();
@@ -226,9 +470,9 @@ export function drawSmokes(v: View, smokes: SmokeCloud[], tick: number) {
       const left = (c.endTick - tick) / 20;
       ctx.globalAlpha = Math.min(1, left / 3) * 0.78; // 消える前の3秒で薄くなる
       const g = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, c.r * scale);
-      g.addColorStop(0, 'rgba(230,230,225,1)');
-      g.addColorStop(0.75, 'rgba(210,210,205,0.95)');
-      g.addColorStop(1, 'rgba(200,200,195,0.4)');
+      g.addColorStop(0, paper() ? 'rgba(150,150,150,1)' : 'rgba(230,230,225,1)');
+      g.addColorStop(0.75, paper() ? 'rgba(170,170,168,0.95)' : 'rgba(210,210,205,0.95)');
+      g.addColorStop(1, paper() ? 'rgba(180,180,178,0.4)' : 'rgba(200,200,195,0.4)');
       ctx.fillStyle = g;
       ctx.beginPath();
       ctx.arc(p.x, p.y, c.r * scale, 0, Math.PI * 2);
@@ -521,7 +765,7 @@ export function drawUnit(v: View, u: Unit, opt: UnitDrawOptions = {}) {
     ctx.stroke();
   }
   if (opt.selected) {
-    ctx.strokeStyle = '#fff';
+    ctx.strokeStyle = paper() ? INK : '#fff';
     ctx.lineWidth = 2;
     ctx.setLineDash([3, 3]);
     ctx.beginPath();
@@ -530,6 +774,17 @@ export function drawUnit(v: View, u: Unit, opt: UnitDrawOptions = {}) {
     ctx.setLineDash([]);
   }
 
+  // 作戦地図:部隊記号で描く(向きは短い線で示す)
+  if (paper()) {
+    drawPaperSymbol(v, u, p, r);
+    ctx.strokeStyle = INK;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    const a = u.kind === 'ifv' ? u.turret : u.facing;
+    ctx.moveTo(p.x + Math.cos(-a) * r * 1.2, p.y + Math.sin(-a) * r * 1.2);
+    ctx.lineTo(p.x + Math.cos(-a) * (r * 1.2 + 7), p.y + Math.sin(-a) * (r * 1.2 + 7));
+    ctx.stroke();
+  } else {
   // 本体(射撃班は丸、スナイパーはひし形、迫撃砲は四角、IFV は向きのある長方形と砲塔)
   ctx.fillStyle = color;
   ctx.strokeStyle = '#111';
@@ -596,6 +851,7 @@ export function drawUnit(v: View, u: Unit, opt: UnitDrawOptions = {}) {
   ctx.lineTo(p.x + Math.cos(-u.facing) * (r + 5), p.y + Math.sin(-u.facing) * (r + 5));
   ctx.stroke();
   }
+  }
 
   // 人数(残りの兵を点で)
   const men = menAlive(u);
@@ -605,7 +861,7 @@ export function drawUnit(v: View, u: Unit, opt: UnitDrawOptions = {}) {
     ctx.fillRect(p.x + 10, p.y + r + 3, 5, 5);
   }
   for (let i = 0; i < (u.kind === 'ifv' ? 0 : stats.men); i++) {
-    ctx.fillStyle = i < men ? '#fff' : 'rgba(255,255,255,0.15)';
+    ctx.fillStyle = paper() ? (i < men ? INK : 'rgba(42,36,28,0.15)') : i < men ? '#fff' : 'rgba(255,255,255,0.15)';
     ctx.fillRect(p.x - 9 + i * 5, p.y + r + 4, 4, 3);
   }
   if (opt.label) {
@@ -669,7 +925,7 @@ export function drawOrders(v: View, u: Unit, o: Orders, selected: boolean, targe
   ctx.save();
   ctx.globalAlpha = selected ? 1 : 0.45;
   const path = [u.pos, ...o.route.map((w) => w.pos)];
-  ctx.strokeStyle = '#a8d4ff';
+  ctx.strokeStyle = paper() ? '#1f5fbf' : '#a8d4ff';
   ctx.lineWidth = 2;
   ctx.setLineDash([6, 4]);
   ctx.beginPath();
@@ -682,7 +938,7 @@ export function drawOrders(v: View, u: Unit, o: Orders, selected: boolean, targe
   o.route.forEach((w, i) => {
     const s = toScreen(v, w.pos);
     ctx.setLineDash([]);
-    ctx.fillStyle = '#a8d4ff';
+    ctx.fillStyle = paper() ? '#1f5fbf' : '#a8d4ff';
     ctx.beginPath();
     ctx.arc(s.x, s.y, 4, 0, Math.PI * 2);
     ctx.fill();
