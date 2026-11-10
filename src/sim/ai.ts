@@ -247,7 +247,9 @@ function assault(state: SimState, plan: AiPlan, mem: AiMemory, us: Unit[], threa
     return out;
   }
   const center = { x: allUs.reduce((a, u) => a + u.pos.x, 0) / Math.max(1, allUs.length), y: allUs.reduce((a, u) => a + u.pos.y, 0) / Math.max(1, allUs.length) };
-  const target = threats.slice().sort(byDistThenId(center))[0]!;
+  // 見えている機関銃を先につぶす(FM 7-8:一番効果的に撃ってくる、組で扱う火器を先に抑える)。いなければ一番近い敵
+  const mgThreat = threats.filter((t) => t.visible && state.units.find((x) => x.id === t.id)?.kind === 'mg').sort(byDistThenId(center))[0];
+  const target = mgThreat ?? threats.slice().sort(byDistThenId(center))[0]!;
   for (const v of ifvs) {
     out[v.id] = O({ policy: 'hold', fire: 'free', focusTargetId: target.visible ? target.id : null, facing: angleTo(v.pos, target.pos) });
   }

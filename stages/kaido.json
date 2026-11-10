@@ -300,6 +300,7 @@
   "shop": [
     "fireteam",
     "sniper",
-    "mortar"
+    "mortar",
+    "mg"
   ]
 }

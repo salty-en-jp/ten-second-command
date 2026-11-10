@@ -11,7 +11,8 @@
     "fireteam",
     "sniper",
     "mortar",
-    "ifv"
+    "ifv",
+    "mg"
   ],
   "deployZone": {
     "x": 10,

@@ -1,5 +1,5 @@
 /** 右側のパネル:選んだ班への命令を入力する */
-import { BUILDING, DEPLOY_COST, MORTAR, unitCost, SMOKE, SUPPRESSION, TICKS_PER_SECOND, type Orders, type SideVision, type Unit } from '../sim';
+import { BUILDING, DEG, DEPLOY_COST, MG, MORTAR, unitCost, SMOKE, SUPPRESSION, TICKS_PER_SECOND, type Orders, type SideVision, type Unit } from '../sim';
 import { label } from './orders';
 import { starText } from './storage';
 import type { Evaluation } from '../sim';
@@ -57,7 +57,7 @@ export function renderPanel(el: HTMLElement, p: PanelProps) {
       const ls = p.vision.lastSeen[u.id];
       return `<div class="hint">${label(u)}:見えていない${ls ? `(最終確認 ${((p.tick - ls.tick) / TICKS_PER_SECOND).toFixed(0)}秒前)` : '(まだ見つけていない)'}</div>`;
     }
-    const max = u.kind === 'sniper' ? 25 : u.kind === 'mortar' ? MORTAR.maxHp : u.kind === 'ifv' ? 200 : 100;
+    const max = u.kind === 'sniper' ? 25 : u.kind === 'mortar' ? MORTAR.maxHp : u.kind === 'mg' ? MG.maxHp : u.kind === 'ifv' ? 200 : 100;
     const extra =
       u.kind === 'ifv' && u.alive
         ? `${u.suppression >= 70 ? '、ハッチを閉めている(視界が狭い)' : ''}${u.passengerId ? `、${label({ id: u.passengerId })}が乗車中` : ''}`
@@ -67,6 +67,11 @@ export function renderPanel(el: HTMLElement, p: PanelProps) {
       u.kind === 'mortar' && u.alive
         ? `、${mortarState[u.mortarState]}${u.mortarTicks > 0 ? ` あと${(u.mortarTicks / TICKS_PER_SECOND).toFixed(1)}秒` : ''}、残弾 ${u.rounds}/${MORTAR.rounds}`
         : '';
+    const mgState = { packed: '据え付けていない(撃てるが威力は半分)', deploying: '据え付け中', deployed: '据え付け済み', packing: '片付け中' };
+    const mg =
+      u.kind === 'mg' && u.alive
+        ? `、${u.reaimFacing !== null ? '据え直し中' : mgState[u.mortarState]}${u.mortarTicks > 0 ? ` あと${(u.mortarTicks / TICKS_PER_SECOND).toFixed(1)}秒` : ''}`
+        : '';
     const sniper =
       u.kind === 'sniper' && u.alive
         ? u.cooldownTicks > 0 ? `、装填中 あと${(u.cooldownTicks / TICKS_PER_SECOND).toFixed(1)}秒` : u.aimTargetId ? `、${label({ id: u.aimTargetId })}を狙っている` : ''
@@ -75,7 +80,7 @@ export function renderPanel(el: HTMLElement, p: PanelProps) {
       !u.alive ? ''
       : u.inBuilding !== null ? `、建物の中${u.buildingTicks > 0 ? `(出ている途中 あと${((BUILDING.exitSec * TICKS_PER_SECOND - u.buildingTicks) / TICKS_PER_SECOND).toFixed(1)}秒)` : ''}`
       : u.buildingTicks > 0 ? '、建物に入っている途中' : '';
-    return `<div class="hint">${label(u)}:耐久 ${Math.ceil(u.hp)}/${max}、制圧値 ${Math.round(u.suppression)}(${stateText(u)})${building}${sniper}${mortar}${extra}</div>`;
+    return `<div class="hint">${label(u)}:耐久 ${Math.ceil(u.hp)}/${max}、制圧値 ${Math.round(u.suppression)}(${stateText(u)})${building}${sniper}${mortar}${mg}${extra}</div>`;
   };
 
   let html = '';
@@ -110,7 +115,7 @@ export function renderPanel(el: HTMLElement, p: PanelProps) {
       <div class="group"><h3>地図をクリックして入力</h3>
         <div class="row">
           ${btn('data-tool="route"', '経路', p.tool === 'route')}
-          ${btn('data-tool="facing"', u.kind === 'sniper' ? '射界(向き)' : '向き', p.tool === 'facing')}
+          ${btn('data-tool="facing"', u.kind === 'sniper' || u.kind === 'mg' ? '射界(向き)' : '向き', p.tool === 'facing')}
           ${btn('data-tool="withdraw"', '離脱経路', p.tool === 'withdraw')}
           ${btn('data-tool="focus"', '撃つ敵を指定', p.tool === 'focus')}
           ${u.kind === 'mortar' ? btn('data-tool="mortar"', '迫撃砲の射撃', p.tool === 'mortar') : ''}
@@ -118,8 +123,8 @@ export function renderPanel(el: HTMLElement, p: PanelProps) {
           ${u.kind === 'fireteam' && u.mountedIn === null ? btn('data-tool="smoke"', `発煙手榴弾(${u.smokeGrenades}個)`, p.tool === 'smoke') : ''}
         </div>
         <div class="hint">${
-          p.tool === 'route' ? `地図をクリックすると経路の点を足します。右クリックか「最後の点を消す」で取り消せます。${u.kind === 'fireteam' || u.kind === 'sniper' ? '窓の点線がある建物をクリックすると、入口まで歩いて中に入ります。' : ''}`
-          : p.tool === 'facing' ? (u.kind === 'sniper' ? '撃つ方向をクリックします。黄色い細い扇形(幅30°)の中に入った敵だけを撃ちます。' : '向かせたい方向をクリックします(経路の終点から)。')
+          p.tool === 'route' ? `地図をクリックすると経路の点を足します。右クリックか「最後の点を消す」で取り消せます。${u.kind === 'fireteam' || u.kind === 'sniper' || u.kind === 'mg' ? '窓の点線がある建物をクリックすると、入口まで歩いて中に入ります。' : ''}`
+          : p.tool === 'facing' ? (u.kind === 'mg' ? `撃つ方向をクリックします。据え付けると、オレンジの扇形(幅${MG.arcWidth / DEG}°)の中の敵だけを${MG.maxRange} mまで撃ちます。` : u.kind === 'sniper' ? '撃つ方向をクリックします。黄色い細い扇形(幅30°)の中に入った敵だけを撃ちます。' : '向かせたい方向をクリックします(経路の終点から)。')
           : p.tool === 'withdraw' ? '「離脱」のときに下がる経路をクリックで足します。右クリックで消します。'
           : p.tool === 'smoke' ? `煙を立てたい場所をクリックします(${SMOKE.grenade.throwRange} m まで。1回で1個)。投げて${SMOKE.grenade.delaySec}秒で半径${SMOKE.grenade.radius} mの煙が立ち、${SMOKE.grenade.durationSec}秒続きます。煙は視線をさえぎりますが、弾は通ります。自分たちも煙の向こうは見えません。右クリックで最後の1個を取り消し。`
           : p.tool === 'oncall' ? `敵が来そうな場所をクリックして登録します(自動で「展開する」になります)。実行中に味方のだれかが、その地点から${MORTAR.onCallRadius} m以内に敵を見つけたら、登録した数だけ撃ちます。予め測ってある地点なので、最初の1発から正確に落ちます。撃った地点は消え、撃つまではフェイズをまたいで残ります。右クリックで最後の地点を取り消し。`
@@ -141,6 +146,11 @@ export function renderPanel(el: HTMLElement, p: PanelProps) {
           .join('')}
         ${u.atRounds > 0 ? `<div class="row">${btn('data-atuse="1"', `対戦車火器を使う(${u.atRounds}発)`, o.atAllowed !== false)}${btn('data-atuse="0"', '使わない', o.atAllowed === false)}</div>
         <div class="hint">見えている敵の IFV が 10〜150 m にいれば、2秒構えて撃ちます。横か後ろに当てないとほとんど効きません(横から2発で撃破)。撃つと後ろ10 mの味方に爆風が当たります。</div>` : ''}
+      </div>` : ''}
+      ${u.kind === 'mg' ? `
+      <div class="group"><h3>機関銃</h3>
+        <div class="row">${btn('data-deploy="1"', '経路の終点で据え付ける', !!o.deploy)}${btn('data-deploy="0"', '据え付けない', !o.deploy)}</div>
+        <div class="hint">据え付けに${MG.setupSec}秒、動き出すには片付けに${MG.packSec}秒。据え付けると「射界(向き)」の${MG.arcWidth / DEG}°の扇形の中だけを、${MG.effectiveRange} mまで威力を落とさずに撃ちます(${MG.maxRange} mまで届く)。敵を倒す力は射撃班の0.8倍、抑え込む力は1.6倍。扇形の外から撃たれると、${MG.reaimSec}秒かけてそちらへ据え直します。撃つと${MG.exposureSec}秒間は見つかりやすい。据え付けないと威力は半分。</div>
       </div>` : ''}
       ${u.kind === 'mortar' ? `
       <div class="group"><h3>迫撃砲</h3>
@@ -196,7 +206,7 @@ export function renderPanel(el: HTMLElement, p: PanelProps) {
   } else if (p.mode === 'deploying') {
     const r = p.army;
     if (r) {
-      const kindName = { fireteam: '射撃班', sniper: '狙撃手', mortar: '迫撃砲班', ifv: 'IFV' } as const;
+      const kindName = { fireteam: '射撃班', sniper: '狙撃手', mortar: '迫撃砲班', ifv: 'IFV', mg: '機関銃班' } as const;
       const over = r.cost > r.budget;
       html += `<div class="group"><h3>編成(持ち点 ${r.budget})</h3>
         <div class="hint" style="${over ? 'color:#ff9f43' : ''}">使っている点数:${r.cost} / ${r.budget}${over ? '(持ち点を超えています。部隊を外してください)' : `(残り ${r.budget - r.cost})`}</div>

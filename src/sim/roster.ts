@@ -27,7 +27,7 @@ export function armyValid(state: SimState, budget: number): boolean {
   return state.units.some((u) => u.side === 'blue') && armyCost(state) <= budget;
 }
 
-const PREFIX: Record<UnitKind, string> = { fireteam: 'b', sniper: 'bs', mortar: 'm', ifv: 'v' };
+const PREFIX: Record<UnitKind, string> = { fireteam: 'b', sniper: 'bs', mortar: 'm', ifv: 'v', mg: 'g' };
 
 /** 新しく買う部隊の id(兵科ごとの番号。狙撃手の1人目は "bs") */
 export function nextUnitId(state: SimState, kind: UnitKind): string {

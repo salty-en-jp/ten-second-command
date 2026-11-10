@@ -4,7 +4,7 @@
  * - 射撃は「着弾位置」と「フェイズ内の発射時刻」で命令する。発射から着弾まで4秒
  * - 着弾を味方が見ていれば、その付近への次の射撃は正確。見ていなければ遠くへずれる
  */
-import { BUILDING, MORTAR, TICKS_PER_SECOND } from './config';
+import { BUILDING, MG, MORTAR, TICKS_PER_SECOND } from './config';
 import { dist } from './geometry';
 import { lineOfFire, occupies } from './terrain';
 import { unitStats } from './config';
@@ -16,6 +16,8 @@ const DEPLOY_TICKS = Math.round(MORTAR.deploySec * TICKS_PER_SECOND);
 const PACK_TICKS = Math.round(MORTAR.packSec * TICKS_PER_SECOND);
 const FLIGHT_TICKS = Math.round(MORTAR.flightSec * TICKS_PER_SECOND);
 const INTERVAL_TICKS = Math.round(MORTAR.intervalSec * TICKS_PER_SECOND);
+const MG_SETUP_TICKS = Math.round(MG.setupSec * TICKS_PER_SECOND);
+const MG_PACK_TICKS = Math.round(MG.packSec * TICKS_PER_SECOND);
 export const WARNING_TICKS = Math.round(MORTAR.warningSec * TICKS_PER_SECOND);
 
 /** 射撃命令を、撃つティックつきの順番待ちに直す(issueOrders から呼ぶ) */
@@ -39,6 +41,9 @@ function wantsToMove(u: Unit): boolean {
 
 /** 展開・撤収を進める。移動できる(収納済み)なら true */
 export function updateMortarState(u: Unit): boolean {
+  // 機関銃チームの据え付け・片付けも同じ仕組み(秒数だけ違う)
+  const deployTicks = u.kind === 'mg' ? MG_SETUP_TICKS : DEPLOY_TICKS;
+  const packTicks = u.kind === 'mg' ? MG_PACK_TICKS : PACK_TICKS;
   if (u.mortarTicks > 0) {
     u.mortarTicks--;
     if (u.mortarTicks === 0) u.mortarState = u.mortarState === 'deploying' ? 'deployed' : 'packed';
@@ -46,10 +51,10 @@ export function updateMortarState(u: Unit): boolean {
   const move = wantsToMove(u);
   if (move && u.mortarState === 'deployed') {
     u.mortarState = 'packing';
-    u.mortarTicks = PACK_TICKS;
+    u.mortarTicks = packTicks;
   } else if (!move && u.orders.deploy && u.mortarState === 'packed') {
     u.mortarState = 'deploying';
-    u.mortarTicks = DEPLOY_TICKS;
+    u.mortarTicks = deployTicks;
   }
   return u.mortarState === 'packed';
 }

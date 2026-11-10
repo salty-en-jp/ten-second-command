@@ -49,6 +49,7 @@ export function makeUnit(kind: UnitKind, id: string, side: Side, pos: Vec2, faci
     missionQueue: [],
     adjustedAim: null,
     duckTicks: 0,
+    reaimFacing: null,
     shelledOnly: false,
     mountedIn: null,
     passengerId: null,

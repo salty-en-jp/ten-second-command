@@ -1,7 +1,8 @@
 /**
  * 描画:sim の状態を読んで Canvas に描くだけ。状態は書き換えない。
  */
-import { MORTAR, SMOKE, SNIPER, SUPPRESSION, unitStats, type Shell, type SmokeCloud, type MapData, type Orders, type SimState, type TerrainKind, type Unit, type Vec2 } from '../sim';
+import {
+  MG, MORTAR, SMOKE, SNIPER, SUPPRESSION, unitStats, type Shell, type SmokeCloud, type MapData, type Orders, type SimState, type TerrainKind, type Unit, type Vec2 } from '../sim';
 import { menAlive } from '../sim/units';
 
 export interface View {
@@ -495,6 +496,21 @@ export function drawUnit(v: View, u: Unit, opt: UnitDrawOptions = {}) {
     ctx.stroke();
   }
 
+  // 据え付けた機関銃の射界(60°。この中の敵だけを遠くまで撃つ)
+  if (u.kind === 'mg' && u.mortarState === 'deployed' && opt.showArc) {
+    const c = opt.arcCenter ?? u.orders.facing ?? u.facing;
+    const half = MG.arcWidth / 2;
+    ctx.fillStyle = u.side === 'blue' ? 'rgba(255,170,90,0.10)' : 'rgba(255,107,90,0.12)';
+    ctx.strokeStyle = u.side === 'blue' ? 'rgba(255,170,90,0.55)' : 'rgba(255,107,90,0.55)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(p.x, p.y);
+    ctx.arc(p.x, p.y, MG.maxRange * scale, -c - half, -c + half);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+  }
+
   // 制圧値のリング
   const sc = suppressionColor(u.suppression);
   if (sc) {
@@ -552,6 +568,13 @@ export function drawUnit(v: View, u: Unit, opt: UnitDrawOptions = {}) {
   } else if (u.kind === 'mortar') {
     const k = r * 0.85;
     ctx.rect(p.x - k, p.y - k, k * 2, k * 2);
+  } else if (u.kind === 'mg') {
+    // 機関銃:三角形(据え付けると底辺に横棒)
+    const k = r * 1.05;
+    ctx.moveTo(p.x, p.y - k);
+    ctx.lineTo(p.x + k, p.y + k * 0.8);
+    ctx.lineTo(p.x - k, p.y + k * 0.8);
+    ctx.closePath();
   } else if (u.kind === 'sniper') {
     const k = r * 0.9;
     ctx.moveTo(p.x, p.y - k);

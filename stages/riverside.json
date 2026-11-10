@@ -255,7 +255,8 @@
     "fireteam",
     "sniper",
     "mortar",
-    "ifv"
+    "ifv",
+    "mg"
   ],
   "tutorial": [
     {

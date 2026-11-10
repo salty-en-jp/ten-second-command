@@ -6,7 +6,7 @@ export interface Vec2 {
 export type Side = 'blue' | 'red';
 
 /** 兵科 */
-export type UnitKind = 'fireteam' | 'sniper' | 'mortar' | 'ifv';
+export type UnitKind = 'fireteam' | 'sniper' | 'mortar' | 'ifv' | 'mg';
 
 /** 迫撃砲の射撃命令:フェイズ開始から atSec 秒後に target へ1発 */
 export interface FireMission {
@@ -202,6 +202,8 @@ export interface Unit {
   /** 着弾を味方が見て修正が済んだ地点 */
   adjustedAim: Vec2 | null;
 
+  /** 機関銃:扇形の外から撃たれて据え直す先の向き(据え直し中のみ) */
+  reaimFacing: number | null;
   /** 飛翔音で伏せている残りティック(この間は動かない) */
   duckTicks: number;
   /** 前のティックに受けた射撃が迫撃砲だけだったか(撃ってきた方向がない) */

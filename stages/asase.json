@@ -10,7 +10,8 @@
   "shop": [
     "fireteam",
     "sniper",
-    "mortar"
+    "mortar",
+    "mg"
   ],
   "deployZone": {
     "x": 10,

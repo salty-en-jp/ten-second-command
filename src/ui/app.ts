@@ -335,7 +335,7 @@ export class App {
       o.deploy = true;
     } else if (this.tool === 'route') {
       // 入れる建物をクリック:入口まで歩いて入る(射撃班とスナイパー)
-      const b = (u.kind === 'fireteam' || u.kind === 'sniper') && u.mountedIn === null ? buildingAt(this.view.map, clamped) : null;
+      const b = (u.kind === 'fireteam' || u.kind === 'sniper' || u.kind === 'mg') && u.mountedIn === null ? buildingAt(this.view.map, clamped) : null;
       const from = o.route.at(-1)?.pos ?? u.pos;
       if (b && u.inBuilding === b.id && o.route.length === 0) o.enterId = b.id;
       else if (b) {
