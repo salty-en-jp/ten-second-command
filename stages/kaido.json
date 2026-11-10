@@ -1,0 +1,310 @@
+{
+  "id": "kaido",
+  "name": "街道の集落(守る・配置あり)",
+  "description": "街道沿いの小さな集落。北から敵の射撃班4つが、抑えと回り込みで攻めてくる。家3軒にこもって守る。西の果樹園と東の沈み道は回り込みの通り道。集落の裏(防衛線)まで入られたら負け。持ち点42で編成を選べる。",
+  "par": 7,
+  "width": 300,
+  "height": 200,
+  "deployment": true,
+  "budget": 42,
+  "deployZone": {
+    "x": 10,
+    "y": 22,
+    "w": 280,
+    "h": 66
+  },
+  "defenseLine": {
+    "defender": "blue",
+    "y": 20
+  },
+  "features": [
+    {
+      "id": "woodsS",
+      "kind": "concealment",
+      "note": "集落の裏の林",
+      "rect": {
+        "cx": 150,
+        "cy": 10,
+        "w": 300,
+        "h": 16
+      }
+    },
+    {
+      "id": "houseW",
+      "kind": "building",
+      "note": "西の家",
+      "rect": {
+        "cx": 70,
+        "cy": 62,
+        "w": 14,
+        "h": 10
+      },
+      "enterable": true
+    },
+    {
+      "id": "houseC",
+      "kind": "building",
+      "note": "中央の家",
+      "rect": {
+        "cx": 150,
+        "cy": 70,
+        "w": 14,
+        "h": 10
+      },
+      "enterable": true
+    },
+    {
+      "id": "houseE",
+      "kind": "building",
+      "note": "東の家",
+      "rect": {
+        "cx": 230,
+        "cy": 62,
+        "w": 14,
+        "h": 10
+      },
+      "enterable": true
+    },
+    {
+      "id": "wallWC",
+      "kind": "hard",
+      "note": "西の家と中央の家の間の石垣",
+      "rect": {
+        "cx": 110,
+        "cy": 74,
+        "w": 24,
+        "h": 1
+      }
+    },
+    {
+      "id": "wheat",
+      "kind": "concealment",
+      "note": "北の麦畑。中の敵は近づくまで見えない",
+      "rect": {
+        "cx": 150,
+        "cy": 140,
+        "w": 300,
+        "h": 70
+      }
+    },
+    {
+      "id": "ditch",
+      "kind": "hard",
+      "note": "牧草地の用水路。攻めてくる敵の足場になる",
+      "rect": {
+        "cx": 150,
+        "cy": 118,
+        "w": 220,
+        "h": 1.5
+      }
+    },
+    {
+      "id": "orchard",
+      "kind": "concealment",
+      "note": "西の果樹園(回り込みの道)",
+      "rect": {
+        "cx": 25,
+        "cy": 90,
+        "w": 30,
+        "h": 110
+      }
+    },
+    {
+      "id": "sunken",
+      "kind": "hard",
+      "note": "東の沈み道の土手(回り込みの道)",
+      "rect": {
+        "cx": 278,
+        "cy": 95,
+        "w": 2,
+        "h": 120
+      }
+    },
+    {
+      "id": "wreck",
+      "kind": "soft",
+      "note": "放棄された車両",
+      "rect": {
+        "cx": 200,
+        "cy": 115,
+        "w": 6,
+        "h": 3
+      }
+    },
+    {
+      "id": "barn",
+      "kind": "building",
+      "note": "北の納屋",
+      "rect": {
+        "cx": 150,
+        "cy": 182,
+        "w": 20,
+        "h": 12
+      }
+    }
+  ],
+  "units": [
+    {
+      "id": "b1",
+      "name": "第1班",
+      "side": "blue",
+      "x": 70,
+      "y": 60,
+      "facingDeg": 90
+    },
+    {
+      "id": "b2",
+      "name": "第2班",
+      "side": "blue",
+      "x": 150,
+      "y": 68,
+      "facingDeg": 90
+    },
+    {
+      "id": "b3",
+      "name": "第3班",
+      "side": "blue",
+      "x": 230,
+      "y": 60,
+      "facingDeg": 90
+    },
+    {
+      "id": "bs",
+      "name": "狙撃手",
+      "kind": "sniper",
+      "side": "blue",
+      "x": 120,
+      "y": 40,
+      "facingDeg": 90,
+      "reserve": true
+    },
+    {
+      "id": "m1",
+      "name": "迫撃砲班",
+      "kind": "mortar",
+      "side": "blue",
+      "x": 150,
+      "y": 28,
+      "facingDeg": 90
+    },
+    {
+      "id": "r1",
+      "name": "敵A",
+      "side": "red",
+      "x": 25,
+      "y": 172,
+      "facingDeg": -90
+    },
+    {
+      "id": "r2",
+      "name": "敵B",
+      "side": "red",
+      "x": 120,
+      "y": 172,
+      "facingDeg": -90,
+      "at": 1
+    },
+    {
+      "id": "r3",
+      "name": "敵C",
+      "side": "red",
+      "x": 180,
+      "y": 172,
+      "facingDeg": -90,
+      "at": 1
+    },
+    {
+      "id": "r4",
+      "name": "敵D",
+      "side": "red",
+      "x": 272,
+      "y": 172,
+      "facingDeg": -90
+    }
+  ],
+  "ai": {
+    "personality": "assault",
+    "side": "red",
+    "advanceRoutes": {
+      "r1": [
+        {
+          "x": 25,
+          "y": 150
+        },
+        {
+          "x": 25,
+          "y": 40
+        },
+        {
+          "x": 60,
+          "y": 15
+        }
+      ],
+      "r2": [
+        {
+          "x": 120,
+          "y": 150
+        },
+        {
+          "x": 120,
+          "y": 95
+        },
+        {
+          "x": 110,
+          "y": 15
+        }
+      ],
+      "r3": [
+        {
+          "x": 180,
+          "y": 150
+        },
+        {
+          "x": 180,
+          "y": 95
+        },
+        {
+          "x": 190,
+          "y": 15
+        }
+      ],
+      "r4": [
+        {
+          "x": 284,
+          "y": 160
+        },
+        {
+          "x": 284,
+          "y": 40
+        },
+        {
+          "x": 250,
+          "y": 15
+        }
+      ]
+    },
+    "flankPoints": [
+      {
+        "x": 30,
+        "y": 70
+      },
+      {
+        "x": 30,
+        "y": 40
+      },
+      {
+        "x": 284,
+        "y": 70
+      },
+      {
+        "x": 284,
+        "y": 40
+      }
+    ]
+  },
+  "aiLabel": {
+    "name": "突撃型",
+    "description": "見つけたら必ず、一方が押さえ、一方が回り込んでくる。集落の裏(防衛線)まで入られたら負け。",
+    "hint": "家どうしで横を守り合え"
+  }
+}

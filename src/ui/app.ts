@@ -208,7 +208,7 @@ export class App {
       ...base,
       units: base.units.map((u) => {
         const n = next.units.find((x) => x.id === u.id);
-        return n && (n.id === id || n.mountedIn === id || u.mountedIn === id) ? { ...u, pos: { ...n.pos }, facing: n.facing, turret: n.turret } : u;
+        return n && (n.id === id || n.mountedIn === id || u.mountedIn === id) ? { ...u, pos: { ...n.pos }, facing: n.facing, turret: n.turret, inBuilding: n.inBuilding } : u;
       }),
     };
     this.applyRosterChoice();
@@ -500,7 +500,7 @@ export class App {
     if (this.mode === 'deploying' && this.dragging && this.dragPos) {
       const u = units.find((x) => x.id === this.dragging);
       if (u) {
-        const ok = canDeployAt(this.current, this.stage.deployZone!, this.dragPos);
+        const ok = canDeployAt(this.current, this.stage.deployZone!, this.dragPos, this.current.units.find((x) => x.id === this.dragging));
         drawDeployGhost(v, { ...u, pos: this.dragPos }, ok);
       }
     }
